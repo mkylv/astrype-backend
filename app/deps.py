@@ -1,11 +1,22 @@
-"""Auth bağımlılığı — Supabase JWT doğrular, current_user döner."""
+"""Auth bağımlılığı — Supabase JWT doğrular, current_user döner.
+
+Supabase yeni projeler token'ları ASİMETRİK (ES256/RS256) imzalar; doğrulama
+projenin JWKS public anahtarlarıyla yapılır. Eski HS256 (paylaşılan secret)
+token'ları da desteklenir (geriye dönük uyum).
+"""
+import time
 from dataclasses import dataclass
 
+import httpx
 from fastapi import Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 
 from app.config import Settings, get_settings
 from app.db.supabase_client import get_supabase, get_user_tier
+
+# JWKS önbelleği (kid -> key). 1 saat TTL.
+_JWKS: dict[str, object] = {"keys": None, "ts": 0.0}
+_JWKS_TTL = 3600.0
 
 
 @dataclass
@@ -14,15 +25,45 @@ class CurrentUser:
     email: str | None = None
 
 
-def _decode_token(token: str, secret: str) -> dict:
+async def _fetch_jwks(settings: Settings, force: bool = False) -> list[dict]:
+    now = time.time()
+    if not force and _JWKS["keys"] and now - _JWKS["ts"] < _JWKS_TTL:
+        return _JWKS["keys"]  # type: ignore[return-value]
+    url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        keys = r.json().get("keys", [])
+    _JWKS["keys"] = keys
+    _JWKS["ts"] = now
+    return keys
+
+
+async def _decode(token: str, settings: Settings) -> dict:
     try:
-        # Supabase HS256 ile imzalar; audience 'authenticated'.
-        return jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        header = jwt.get_unverified_header(token)
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail=f"Geçersiz token: {exc}") from exc
+
+    alg = header.get("alg")
+    opts = {"audience": "authenticated"}
+
+    try:
+        if alg == "HS256":
+            return jwt.decode(
+                token, settings.supabase_jwt_secret, algorithms=["HS256"], **opts
+            )
+        # Asimetrik: JWKS'ten kid ile eşleşen public anahtar.
+        kid = header.get("kid")
+        keys = await _fetch_jwks(settings)
+        jwk = next((k for k in keys if k.get("kid") == kid), None)
+        if jwk is None:
+            # Anahtar rotasyonu olmuş olabilir; önbelleği zorla yenile.
+            keys = await _fetch_jwks(settings, force=True)
+            jwk = next((k for k in keys if k.get("kid") == kid), None)
+        if jwk is None:
+            raise HTTPException(status_code=401, detail="İmza anahtarı bulunamadı.")
+        return jwt.decode(token, jwk, algorithms=[alg], **opts)
     except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,7 +81,7 @@ async def current_user(
             detail="Authorization: Bearer <token> bekleniyor.",
         )
     token = authorization.split(" ", 1)[1].strip()
-    payload = _decode_token(token, settings.supabase_jwt_secret)
+    payload = await _decode(token, settings)
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Token 'sub' içermiyor.")
