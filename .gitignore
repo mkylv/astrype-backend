@@ -1,0 +1,9 @@
+.venv/
+.tools/
+.branches/
+.temp/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.DS_Store

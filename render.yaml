@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: astrype-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      # Gizli değerler Render panelinde / API ile set edilir (repoda tutulmaz).
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: the-numerology-api.p.rapidapi.com
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4o
+      - key: OPENAI_VISION_MODEL
+        value: gpt-4o
+      - key: OPENAI_EMBED_MODEL
+        value: text-embedding-3-small
+      - key: REVENUECAT_WEBHOOK_SECRET
+        sync: false
+      - key: ENV
+        value: prod
+      - key: CORS_ORIGINS
+        value: "*"
