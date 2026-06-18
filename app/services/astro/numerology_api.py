@@ -82,10 +82,14 @@ class NumerologyAPIProvider(AstroProvider):
             "person_b": chart_b.get("birth_chart", chart_b),
         }
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def natal_chart_svg(self, birth: BirthData, theme: str = "dark") -> bytes:
-        """Bu RapidAPI ucu SVG döndürmez. Chart görseli Flutter tarafında ham
-        JSON'dan (CustomPainter) çizilir. Net hata döneriz."""
-        raise httpx.HTTPError(
-            "SVG bu sağlayıcıda mevcut değil; chart görseli istemci tarafında "
-            "natal JSON'dan çizilir."
-        )
+        """Kerykeion natal wheel SVG'sini döner (GET /birth-chart/svg)."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            r = await client.get(
+                f"{self._base}/birth-chart/svg",
+                params=self._params(birth),
+                headers=self._headers,
+            )
+            r.raise_for_status()
+            return r.content

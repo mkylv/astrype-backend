@@ -59,8 +59,16 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     sb.table("charts").insert(
         {"user_id": user.id, "raw_json": raw, "provider": provider.name}
     ).execute()
-    # Ham sağlayıcı yorumu kullanıcıya gösterilmez; yalnızca kompakt özet döner.
-    return {"provider": provider.name, "snapshot": _snapshot(raw)}
+
+    # Natal wheel SVG (görselleştirme için). Başarısız olursa snapshot yine döner.
+    svg: str | None = None
+    try:
+        svg = (await provider.natal_chart_svg(birth)).decode("utf-8")
+    except Exception:
+        svg = None
+
+    # Ham sağlayıcı yorumu kullanıcıya gösterilmez; yalnızca kompakt özet + görsel.
+    return {"provider": provider.name, "snapshot": _snapshot(raw), "svg": svg}
 
 
 @router.get("/chart/svg")
