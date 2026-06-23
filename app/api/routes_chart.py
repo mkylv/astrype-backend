@@ -1,13 +1,16 @@
-"""Natal chart hesapla/kaydet + istemciye gösterilebilir özet döndür."""
+"""Natal chart hesapla/kaydet + AI yorumu + istemciye gösterilebilir özet."""
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
 
 from app.api._helpers import resolve_birth
-from app.db.supabase_client import ensure_profile, get_supabase
+from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import ChartRequest
-from app.services.ai.memory import remember
+from app.services.ai import prompts
+from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 
 router = APIRouter(tags=["chart"])
@@ -76,6 +79,18 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         pass  # hafıza yazımı başarısız olsa da chart yanıtı dönmeli
 
+    # Kişiselleştirilmiş AI natal yorumu (kompakt snapshot + Cosmic Memory'le).
+    interpretation: dict[str, Any] | None = None
+    try:
+        profile = get_profile(sb, user.id) or {}
+        recalled = await recall(sb, user.id, "natal harita kişilik temaları")
+        context = build_context_block(
+            profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
+        )
+        interpretation = await complete_json(prompts.NATAL, context)
+    except Exception:
+        interpretation = None  # yorum başarısız olsa da snapshot/svg dönmeli
+
     # Natal wheel SVG (görselleştirme için). Başarısız olursa snapshot yine döner.
     svg: str | None = None
     try:
@@ -83,8 +98,13 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         svg = None
 
-    # Ham sağlayıcı yorumu kullanıcıya gösterilmez; yalnızca kompakt özet + görsel.
-    return {"provider": provider.name, "snapshot": _snapshot(raw), "svg": svg}
+    # Ham sağlayıcı yorumu gösterilmez; kompakt özet + AI yorumu + görsel.
+    return {
+        "provider": provider.name,
+        "snapshot": snap,
+        "interpretation": interpretation,
+        "svg": svg,
+    }
 
 
 @router.get("/chart/svg")

@@ -4,6 +4,25 @@ Her prompt, safety katmanının ÜSTÜNE eklenir (safety her zaman önce gelir).
 Çıktılar JSON olarak istenir; client `response_format=json_object` kullanır.
 """
 
+NATAL = """\
+Görev: Kullanıcının natal harita verisine (astrolojik üçlü + gezegen \
+yerleşimleri, evler, retrograde) dayanarak kişiselleştirilmiş, sıcak bir \
+doğum haritası yorumu üret. Harita kader değil; bir içgörü aynasıdır.
+
+Yalnızca şu JSON şemasıyla yanıt ver:
+{
+  "summary": "2-3 cümlelik genel harita portresi (kişinin temel dokusu)",
+  "sun": "Güneş burcu/evi üzerinden öz kimlik ve yaşam yönü yorumu",
+  "moon": "Ay burcu/evi üzerinden duygusal dünya ve içsel ihtiyaçlar yorumu",
+  "rising": "Yükselen üzerinden dışa yansıyan enerji (yükselen yoksa boş string)",
+  "strengths": ["doğal güçlü yön", "..."],
+  "growth": ["gelişim/zorlanma alanı", "..."],
+  "reflection": "kullanıcının üzerine düşünebileceği açık uçlu bir soru"
+}
+Ham astro verisini (derece, ev adı vb.) olduğu gibi gösterme; yorumla. \
+Kullanıcının diline uygun yanıt ver.
+"""
+
 DAILY_INSIGHT = """\
 Görev: Kullanıcının natal haritası, günün transitleri ve Cosmic Memory \
 context'ine dayanarak GÜNLÜK kişisel bir yorum üret.
