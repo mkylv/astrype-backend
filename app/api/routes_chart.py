@@ -7,6 +7,7 @@ from app.api._helpers import resolve_birth
 from app.db.supabase_client import ensure_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import ChartRequest
+from app.services.ai.memory import remember
 from app.services.astro import get_astro_provider
 
 router = APIRouter(tags=["chart"])
@@ -59,6 +60,21 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     sb.table("charts").insert(
         {"user_id": user.id, "raw_json": raw, "provider": provider.name}
     ).execute()
+
+    # Cosmic Memory: natal özetini hafızaya yaz ki AI sohbet haritayı bilsin.
+    snap = _snapshot(raw)
+    bodies_txt = ", ".join(
+        f"{b['name']} {b['sign']}{' ℞' if b.get('retrograde') else ''}"
+        for b in snap.get("bodies", [])
+    )
+    summary = (
+        f"Natal harita — Güneş {snap.get('sun_sign')}, Ay {snap.get('moon_sign')}, "
+        f"Yükselen {snap.get('rising_sign') or '?'}. Gezegenler: {bodies_txt}."
+    )
+    try:
+        await remember(sb, user.id, "chart", summary)
+    except Exception:
+        pass  # hafıza yazımı başarısız olsa da chart yanıtı dönmeli
 
     # Natal wheel SVG (görselleştirme için). Başarısız olursa snapshot yine döner.
     svg: str | None = None
