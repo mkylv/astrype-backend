@@ -15,8 +15,14 @@ def test_tarot_draw_unique_and_count():
 
 
 def test_tarot_draw_caps_at_deck_size():
+    # Varsayılan tam deste (78 kart) — çekim deste boyutunda sınırlanır.
     cards = tarot.draw(100)
-    assert len(cards) == len(tarot.MAJOR_ARCANA)
+    assert len(cards) == 78
+
+
+def test_tarot_draw_major_mode_caps_at_22():
+    cards = tarot.draw(100, deck="major")
+    assert len(cards) == len(tarot.MAJOR_ARCANA) == 22
 
 
 def test_safety_prompt_present():

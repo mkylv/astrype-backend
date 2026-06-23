@@ -12,10 +12,6 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_jwt_secret: str = ""
 
-    # Astro provider
-    rapidapi_key: str = ""
-    rapidapi_host: str = "the-numerology-api.p.rapidapi.com"
-
     # OpenAI
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4o"

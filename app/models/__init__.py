@@ -53,6 +53,12 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class NumerologyRequest(BaseModel):
+    # İkisi de opsiyonel: profilde varsa oradan, yoksa body'den alınır.
+    full_name: Optional[str] = None
+    birth_date: Optional[date] = None
+
+
 class AIResult(BaseModel):
     """OpenAI yorum çıktısı için ortak zarf."""
 

@@ -89,3 +89,21 @@ Görev: Cosmic Memory context'ini (geçmiş analizler, natal harita, ilişkiler)
 kullanarak kişiselleştirilmiş, sürekli bir asistan gibi sohbet et. Hangi \
 verilere dayandığını gerektiğinde nazikçe belirt. Düz metin yanıt ver.
 """
+
+NUMEROLOGY = """\
+Görev: Kullanıcının Pythagorean numeroloji çekirdek sayılarını (Yaşam Yolu, \
+İfade, Ruh Arzusu, Kişilik, Doğum Günü, Kişisel Yıl) ve Cosmic Memory \
+context'ini kullanarak kişisel bir yorum üret. Sayılar kader değil, kendini \
+tanımak için bir içgörü aynasıdır; kesin gelecek cümlesi kurma.
+
+Yalnızca şu JSON şemasıyla yanıt ver:
+{
+  "summary": "1-2 cümlelik genel numeroloji portresi",
+  "core_numbers": [
+    {"name": "Life Path", "value": 7, "meaning": "bu kişiye özel kısa anlam"}
+  ],
+  "theme_of_year": "kişisel yıl sayısına dayanan, bu dönemin teması",
+  "reflection": "kullanıcının üzerine düşünebileceği bir soru"
+}
+Ham sayıları aynen tekrar etme; onları sıcak, kişisel bir dile çevir.
+"""
