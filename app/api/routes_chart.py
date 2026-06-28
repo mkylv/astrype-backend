@@ -91,10 +91,10 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         interpretation = None  # yorum başarısız olsa da snapshot/svg dönmeli
 
-    # Natal wheel SVG (görselleştirme için). Başarısız olursa snapshot yine döner.
+    # Natal wheel SVG (koyu tema — siyah zemin, beyaz/altın çizgiler).
     svg: str | None = None
     try:
-        svg = (await provider.natal_chart_svg(birth)).decode("utf-8")
+        svg = (await provider.natal_chart_svg(birth, theme="dark")).decode("utf-8")
     except Exception:
         svg = None
 

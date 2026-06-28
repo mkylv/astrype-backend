@@ -28,6 +28,9 @@ class ProfileIn(BaseModel):
     birth_tz: Optional[str] = None
     language: str = "en"
     interests: list[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    relationship_status: Optional[str] = None
+    work_status: Optional[str] = None
 
 
 class ChartRequest(BaseModel):
