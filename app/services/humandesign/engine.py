@@ -208,6 +208,18 @@ def _determine_type(defined_centers: set[str], channels: list[tuple[int, int]]) 
     return "Projector"
 
 
+_RIGHT_ANGLE = {"1/3", "1/4", "2/4", "2/5", "3/5", "3/6", "4/6"}
+_LEFT_ANGLE = {"5/1", "5/2", "6/2", "6/3"}
+
+
+def _cross_type(profile: str) -> str:
+    if profile in _RIGHT_ANGLE:
+        return "Sağ Açı (Right Angle)"
+    if profile in _LEFT_ANGLE:
+        return "Sol Açı (Left Angle)"
+    return "Juxtaposition"
+
+
 def _determine_authority(defined_centers: set[str]) -> str:
     for center, authority in [
         ("Solar Plexus", "Duygusal (Emotional)"),
@@ -278,10 +290,16 @@ def calculate_bodygraph(birth: BirthData) -> dict[str, Any]:
         "active_channels": [f"{a}-{b}" for a, b in channels],
         "active_gates": sorted(gate_set),
         "incarnation_cross": {
-            "personality_sun": personality["Sun"]["gate"],
-            "personality_earth": personality["Earth"]["gate"],
-            "design_sun": design["Sun"]["gate"],
-            "design_earth": design["Earth"]["gate"],
+            "type": _cross_type(profile),
+            "gates": [
+                personality["Sun"]["gate"], personality["Earth"]["gate"],
+                design["Sun"]["gate"], design["Earth"]["gate"],
+            ],
+            "label": (
+                f"{_cross_type(profile)} Haçı "
+                f"({personality['Sun']['gate']}/{personality['Earth']['gate']} | "
+                f"{design['Sun']['gate']}/{design['Earth']['gate']})"
+            ),
         },
         "time_known": bool(birth.birth_time_known and birth.birth_time),
         "personality": personality,
