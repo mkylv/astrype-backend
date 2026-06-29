@@ -7,6 +7,7 @@ from app.api import (
     routes_chat,
     routes_coffee,
     routes_daily,
+    routes_humandesign,
     routes_numerology,
     routes_palm,
     routes_profile,
@@ -49,6 +50,7 @@ for module in (
     routes_relationship,
     routes_chat,
     routes_numerology,
+    routes_humandesign,
     routes_readings,
     routes_webhooks,
 ):
