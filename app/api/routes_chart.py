@@ -91,6 +91,20 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         interpretation = None  # yorum başarısız olsa da snapshot/svg dönmeli
 
+    # Kayıtlar arşivi: natal haritayı readings'e de yaz (kullanıcı sonra görsün).
+    record = {
+        "user_id": user.id,
+        "input_meta": {"place": birth.place, "date": str(birth.birth_date)},
+        "result": {"snapshot": snap, "interpretation": interpretation},
+    }
+    try:
+        sb.table("readings").insert({**record, "type": "chart"}).execute()
+    except Exception:
+        try:
+            sb.table("readings").insert({**record, "type": "reading"}).execute()
+        except Exception:
+            pass
+
     # Natal wheel SVG (koyu tema — siyah zemin, beyaz/altın çizgiler).
     svg: str | None = None
     try:

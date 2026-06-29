@@ -32,7 +32,32 @@ async def chat(body: ChatRequest, user: CurrentUser = Depends(current_user)):
     # Cosmic Memory recall + profil -> context.
     profile = get_profile(sb, user.id)
     recalled = await recall(sb, user.id, body.message)
-    context = build_context_block(profile, recalled)
+
+    # En güncel natal haritayı HER ZAMAN context'e ekle (recall'a bağlı kalmadan).
+    extra: dict[str, str] = {}
+    chart = (
+        sb.table("charts")
+        .select("raw_json")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if chart.data:
+        bc = (chart.data[0].get("raw_json") or {}).get("birth_chart", {})
+        def _sign(k: str) -> str | None:
+            return (bc.get(k) or {}).get("sign")
+        bodies = ", ".join(
+            f"{k.capitalize()} {(bc.get(k) or {}).get('sign')}"
+            for k in ("mercury", "venus", "mars", "jupiter", "saturn")
+            if (bc.get(k) or {}).get("sign")
+        )
+        extra["Natal harita"] = (
+            f"Güneş {_sign('sun')}, Ay {_sign('moon')}, Yükselen {_sign('ascendant')}"
+            + (f"; {bodies}" if bodies else "")
+        )
+
+    context = build_context_block(profile, recalled, extra or None)
     system = f"{prompts.CHAT}\n\n# Kullanıcı Context\n{context}"
 
     answer = await complete_chat(system, history, body.message)
