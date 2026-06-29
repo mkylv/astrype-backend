@@ -14,7 +14,7 @@ Ephemeris yolu kullanılır (moshier'dan daha doğru).
 """
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -304,4 +304,79 @@ def calculate_bodygraph(birth: BirthData) -> dict[str, Any]:
         "time_known": bool(birth.birth_time_known and birth.birth_time),
         "personality": personality,
         "design": design,
+    }
+
+
+def _now_jd() -> float:
+    u = datetime.now(timezone.utc)
+    return swe.julday(u.year, u.month, u.day, u.hour + u.minute / 60 + u.second / 3600)
+
+
+def calculate_transit(birth: BirthData) -> dict[str, Any]:
+    """Bugünün gök transiti + kullanıcının natal tasarımına etkisi.
+
+    Transit gezegenlerinin aktif ettiği kapılar; natal+transit birleşince
+    'köprülenen' (geçici tanımlanan) kanallar.
+    """
+    natal = calculate_bodygraph(birth)
+    natal_gates = set(natal["active_gates"])
+
+    jd = _now_jd()
+    transit = _positions(jd)
+    t_gates = {p["gate"] for p in transit.values()}
+    combined = natal_gates | t_gates
+
+    highlight = [
+        f"{a}-{b}"
+        for a, b in CHANNELS
+        if a in combined and b in combined and (a in t_gates or b in t_gates)
+    ]
+    return {
+        "date": datetime.now(timezone.utc).date().isoformat(),
+        "type": natal["type"],
+        "transit": transit,
+        "transit_gates": sorted(t_gates),
+        "highlight_channels": highlight,
+    }
+
+
+def calculate_composite(a: BirthData, b: BirthData) -> dict[str, Any]:
+    """İki kişinin tasarımı arası bağlantı kanalları + tipleri.
+
+    - electromagnetic: her kişi kanalın bir kapısını getirir (çekim)
+    - companionship: her ikisi de kanalın iki kapısına da sahip
+    - dominance: kanalın iki kapısına da bir kişi sahip (baskınlık)
+    """
+    ba = calculate_bodygraph(a)
+    bb = calculate_bodygraph(b)
+    ga = set(ba["active_gates"])
+    gb = set(bb["active_gates"])
+    combined = ga | gb
+
+    connections: list[dict[str, Any]] = []
+    counts = {"electromagnetic": 0, "companionship": 0, "dominance": 0}
+    defined_centers: set[str] = set()
+
+    for g1, g2 in CHANNELS:
+        if not ((g1 in combined) and (g2 in combined)):
+            continue
+        a_full = g1 in ga and g2 in ga
+        b_full = g1 in gb and g2 in gb
+        if a_full and b_full:
+            ctype = "companionship"
+        elif a_full or b_full:
+            ctype = "dominance"
+        else:
+            ctype = "electromagnetic"
+        counts[ctype] += 1
+        connections.append({"channel": f"{g1}-{g2}", "type": ctype})
+        c1, c2 = CHANNEL_CENTERS[(g1, g2)]
+        defined_centers.update((c1, c2))
+
+    return {
+        "person_a": {"type": ba["type"], "profile": ba["profile"], "authority": ba["authority"]},
+        "person_b": {"type": bb["type"], "profile": bb["profile"], "authority": bb["authority"]},
+        "connection_channels": connections,
+        "counts": counts,
+        "shared_defined_centers": sorted(defined_centers),
     }
