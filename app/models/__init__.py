@@ -56,6 +56,11 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class EbcedRequest(BaseModel):
+    full_name: Optional[str] = None
+    mother_name: Optional[str] = None
+
+
 class NumerologyRequest(BaseModel):
     # İkisi de opsiyonel: profilde varsa oradan, yoksa body'den alınır.
     full_name: Optional[str] = None

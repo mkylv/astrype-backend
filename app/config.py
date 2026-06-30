@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     openai_vision_model: str = "gpt-4o"
     openai_embed_model: str = "text-embedding-3-small"
 
+    # Gemini (Ebced / ilm-i hurûf yorumu)
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 
