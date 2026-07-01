@@ -61,6 +61,15 @@ class EbcedRequest(BaseModel):
     mother_name: Optional[str] = None
 
 
+class DreamRequest(BaseModel):
+    dream: str
+    mode: Literal["psychology", "mystic"] = "mystic"
+
+
+class YildiznameRequest(BaseModel):
+    mother_name: str
+
+
 class NumerologyRequest(BaseModel):
     # İkisi de opsiyonel: profilde varsa oradan, yoksa body'den alınır.
     full_name: Optional[str] = None

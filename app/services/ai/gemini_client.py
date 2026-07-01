@@ -52,6 +52,52 @@ async def complete_json_gemini(system_prompt: str, context: str) -> dict[str, An
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+async def vision_json_gemini(prompt: str, image_bytes: bytes) -> dict[str, Any]:
+    """Görselden JSON çıkarım (OpenAI vision çökerse fallback).
+
+    Foto yalnızca istek gövdesinde base64 olarak gider; saklanmaz.
+    """
+    import base64
+
+    s = get_settings()
+    system = f"{SAFETY_SYSTEM_PROMPT}\n\n{prompt}"
+    url = f"{_BASE}/{s.gemini_model}:generateContent?key={s.gemini_api_key}"
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": base64.b64encode(image_bytes).decode(),
+                        }
+                    },
+                ],
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.4,
+            "maxOutputTokens": 2048,
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
+    }
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(url, json=payload)
+        r.raise_for_status()
+        data = r.json()
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+        text = "".join(p.get("text", "") for p in parts)
+    except (KeyError, IndexError) as exc:
+        raise RuntimeError(f"Gemini vision yanıtı çözümlenemedi: {data}") from exc
+    return _parse_json(text)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
 async def complete_text_gemini(
     system_prompt: str, history: list[dict[str, str]], message: str
 ) -> str:

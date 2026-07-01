@@ -24,3 +24,11 @@ async def extract_palm_lines(image_bytes: bytes) -> list[str]:
         prompts.VISION_PALM_EXTRACT, image_bytes
     )
     return [str(s) for s in data.get("lines", [])]
+
+
+async def extract_face_features(image_bytes: bytes) -> list[str]:
+    """Yüz fotoğrafından sima özellikleri listesi. Foto saklanmaz."""
+    data: dict[str, Any] = await vision_extract_symbols(
+        prompts.VISION_FACE_EXTRACT, image_bytes
+    )
+    return [str(s) for s in data.get("features", [])]

@@ -7,7 +7,9 @@ from app.api import (
     routes_chat,
     routes_coffee,
     routes_daily,
+    routes_dream,
     routes_ebced,
+    routes_face,
     routes_humandesign,
     routes_numerology,
     routes_palm,
@@ -16,6 +18,7 @@ from app.api import (
     routes_relationship,
     routes_tarot,
     routes_webhooks,
+    routes_yildizname,
 )
 from app.config import get_settings
 
@@ -53,6 +56,9 @@ for module in (
     routes_numerology,
     routes_humandesign,
     routes_ebced,
+    routes_face,
+    routes_dream,
+    routes_yildizname,
     routes_readings,
     routes_webhooks,
 ):

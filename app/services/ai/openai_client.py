@@ -10,7 +10,11 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
-from app.services.ai.gemini_client import complete_json_gemini, complete_text_gemini
+from app.services.ai.gemini_client import (
+    complete_json_gemini,
+    complete_text_gemini,
+    vision_json_gemini,
+)
 from app.services.ai.safety import SAFETY_SYSTEM_PROMPT
 
 _client: AsyncOpenAI | None = None
@@ -77,9 +81,19 @@ async def complete_chat(system: str, history: list[dict[str, str]], message: str
         return await complete_text_gemini(system, history, message)
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
 async def vision_extract_symbols(prompt: str, image_bytes: bytes) -> dict[str, Any]:
-    """Fotoğraftan yalnızca sembol listesi çıkar (yorum değil). Foto saklanmaz."""
+    """Fotoğraftan yalnızca gözlem listesi çıkar (yorum değil). Foto saklanmaz.
+
+    OpenAI vision çökerse (kota/limit) Gemini vision'a düşer.
+    """
+    try:
+        return await _openai_vision(prompt, image_bytes)
+    except Exception:
+        return await vision_json_gemini(prompt, image_bytes)
+
+
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+async def _openai_vision(prompt: str, image_bytes: bytes) -> dict[str, Any]:
     s = get_settings()
     b64 = base64.b64encode(image_bytes).decode()
     resp = await _get_client().chat.completions.create(
