@@ -51,6 +51,42 @@ async def complete_json_gemini(system_prompt: str, context: str) -> dict[str, An
     return _parse_json(text)
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+async def complete_text_gemini(
+    system_prompt: str, history: list[dict[str, str]], message: str
+) -> str:
+    """Düz metin sohbet yanıtı (OpenAI çökerse chat fallback'i)."""
+    s = get_settings()
+    system = f"{SAFETY_SYSTEM_PROMPT}\n\n{system_prompt}"
+    url = f"{_BASE}/{s.gemini_model}:generateContent?key={s.gemini_api_key}"
+    contents = [
+        {
+            "role": "model" if m.get("role") == "assistant" else "user",
+            "parts": [{"text": m.get("content", "")}],
+        }
+        for m in history
+    ]
+    contents.append({"role": "user", "parts": [{"text": message}]})
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.85,
+            "maxOutputTokens": 2048,
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
+    }
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(url, json=payload)
+        r.raise_for_status()
+        data = r.json()
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+        return "".join(p.get("text", "") for p in parts)
+    except (KeyError, IndexError) as exc:
+        raise RuntimeError(f"Gemini yanıtı çözümlenemedi: {data}") from exc
+
+
 def _parse_json(text: str) -> dict[str, Any]:
     """JSON'u çöz; markdown fence / önek-sonek varsa ayıkla."""
     t = text.strip()

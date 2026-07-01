@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
+from app.services.ai.gemini_client import complete_json_gemini, complete_text_gemini
 from app.services.ai.safety import SAFETY_SYSTEM_PROMPT
 
 _client: AsyncOpenAI | None = None
@@ -31,9 +32,8 @@ def _messages(system: str, user_content: Any) -> list[dict[str, Any]]:
     ]
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-async def complete_json(system: str, user_text: str) -> dict[str, Any]:
-    """JSON modunda yorum üret (daily, tarot, relationship, fal)."""
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+async def _openai_json(system: str, user_text: str) -> dict[str, Any]:
     s = get_settings()
     resp = await _get_client().chat.completions.create(
         model=s.openai_chat_model,
@@ -44,9 +44,16 @@ async def complete_json(system: str, user_text: str) -> dict[str, Any]:
     return json.loads(resp.choices[0].message.content or "{}")
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-async def complete_chat(system: str, history: list[dict[str, str]], message: str) -> str:
-    """Düz metin sohbet yanıtı (Cosmic Memory chat)."""
+async def complete_json(system: str, user_text: str) -> dict[str, Any]:
+    """JSON modunda yorum üret. OpenAI çökerse (kota/limit) Gemini'ye düşer."""
+    try:
+        return await _openai_json(system, user_text)
+    except Exception:
+        return await complete_json_gemini(system, user_text)
+
+
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+async def _openai_chat(system: str, history: list[dict[str, str]], message: str) -> str:
     s = get_settings()
     msgs = [
         {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
@@ -60,6 +67,14 @@ async def complete_chat(system: str, history: list[dict[str, str]], message: str
         temperature=0.8,
     )
     return resp.choices[0].message.content or ""
+
+
+async def complete_chat(system: str, history: list[dict[str, str]], message: str) -> str:
+    """Düz metin sohbet yanıtı. OpenAI çökerse Gemini'ye düşer."""
+    try:
+        return await _openai_chat(system, history, message)
+    except Exception:
+        return await complete_text_gemini(system, history, message)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))

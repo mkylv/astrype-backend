@@ -14,19 +14,26 @@ _TOP_K = 6
 
 
 async def remember(sb: Client, user_id: str, source: str, summary: str) -> None:
-    """Anlamlı bir özeti vektörleyip memory_chunks'a yaz."""
+    """Anlamlı bir özeti vektörleyip memory_chunks'a yaz.
+
+    Embedding sağlayıcısı (OpenAI) çökerse sessizce atlanır — hafıza yazımı
+    hiçbir modülü çökertmemeli.
+    """
     summary = summary.strip()
     if len(summary) < 12:
         return  # çok kısa / anlamsız özetleri saklama
-    vector = await embed(summary)
-    sb.table("memory_chunks").insert(
-        {
-            "user_id": user_id,
-            "source": source,
-            "summary": summary,
-            "embedding": vector,
-        }
-    ).execute()
+    try:
+        vector = await embed(summary)
+        sb.table("memory_chunks").insert(
+            {
+                "user_id": user_id,
+                "source": source,
+                "summary": summary,
+                "embedding": vector,
+            }
+        ).execute()
+    except Exception:
+        return  # embedding/DB hatası → hafıza yazımı atlanır
 
 
 async def recall(sb: Client, user_id: str, query: str, top_k: int = _TOP_K) -> list[str]:
@@ -35,13 +42,16 @@ async def recall(sb: Client, user_id: str, query: str, top_k: int = _TOP_K) -> l
     `match_memory` RPC'si migration'da tanımlıdır; RLS yerine açık user_id
     filtresiyle çalışır (backend service-role).
     """
-    vector = await embed(query)
-    res = sb.rpc(
-        "match_memory",
-        {"p_user_id": user_id, "p_query": vector, "p_match_count": top_k},
-    ).execute()
-    rows: list[dict[str, Any]] = res.data or []
-    return [r["summary"] for r in rows]
+    try:
+        vector = await embed(query)
+        res = sb.rpc(
+            "match_memory",
+            {"p_user_id": user_id, "p_query": vector, "p_match_count": top_k},
+        ).execute()
+        rows: list[dict[str, Any]] = res.data or []
+        return [r["summary"] for r in rows]
+    except Exception:
+        return []  # embedding/RPC hatası → context'siz devam (modül çökmesin)
 
 
 def build_context_block(
