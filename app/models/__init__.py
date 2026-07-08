@@ -70,6 +70,11 @@ class YildiznameRequest(BaseModel):
     mother_name: str
 
 
+class SubconsciousRequest(BaseModel):
+    """Testte her adımda seçilen gölge anahtarları (points_to)."""
+    answers: list[str] = Field(default_factory=list)
+
+
 class NumerologyRequest(BaseModel):
     # İkisi de opsiyonel: profilde varsa oradan, yoksa body'den alınır.
     full_name: Optional[str] = None

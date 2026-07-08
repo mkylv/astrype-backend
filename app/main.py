@@ -16,6 +16,7 @@ from app.api import (
     routes_profile,
     routes_readings,
     routes_relationship,
+    routes_subconscious,
     routes_tarot,
     routes_webhooks,
     routes_yildizname,
@@ -59,6 +60,7 @@ for module in (
     routes_face,
     routes_dream,
     routes_yildizname,
+    routes_subconscious,
     routes_readings,
     routes_webhooks,
 ):
