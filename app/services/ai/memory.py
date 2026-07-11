@@ -12,6 +12,16 @@ from app.services.ai.openai_client import embed
 # RAG'a eklenecek context için varsayılan üst sınır.
 _TOP_K = 6
 
+# Dil kodu -> yanıt dilinin insan-okur adı. Tüm AI modülleri tek noktadan
+# kullanıcının seçtiği dile bu talimatla uyar.
+_LANG_NAMES = {
+    "en": "English",
+    "tr": "Türkçe",
+    "az": "Azərbaycanca",
+    "ru": "Русский",
+    "es": "Español",
+}
+
 
 async def remember(sb: Client, user_id: str, source: str, summary: str) -> None:
     """Anlamlı bir özeti vektörleyip memory_chunks'a yaz.
@@ -74,4 +84,14 @@ def build_context_block(
     if extra:
         for k, v in extra.items():
             parts.append(f"{k}: {v}")
+    # Kullanıcı Türkçe dışında bir dil seçtiyse, tüm modüllere tek noktadan
+    # güçlü bir dil talimatı ekle (Türkçe varsayılan olduğundan gerekmez).
+    if profile:
+        lang = profile.get("language")
+        if lang and lang not in ("tr", "tr-TR"):
+            lang_name = _LANG_NAMES.get(lang, lang)
+            parts.append(
+                f"ÇOK ÖNEMLİ: Tüm yanıtını ve tüm JSON alanlarının metinlerini "
+                f"yalnızca {lang_name} dilinde yaz."
+            )
     return "\n\n".join(parts) if parts else "(henüz context yok)"
