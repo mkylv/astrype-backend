@@ -2,8 +2,7 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.db.supabase_client import get_profile, get_supabase
-# TODO(yayın): require_premium'a geri çevrilecek (test dönemi serbest).
-from app.deps import CurrentUser, current_user
+from app.deps import CurrentUser, require_premium
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -16,7 +15,7 @@ router = APIRouter(tags=["palm"])
 async def palm_reading(
     photo: UploadFile = File(...),
     note: str | None = Form(default=None),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(require_premium),
 ):
     sb = get_supabase()
 

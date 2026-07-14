@@ -12,6 +12,7 @@ from app.api import (
     routes_face,
     routes_horoscope,
     routes_humandesign,
+    routes_legal,
     routes_numerology,
     routes_palm,
     routes_profile,
@@ -64,6 +65,7 @@ for module in (
     routes_yildizname,
     routes_subconscious,
     routes_readings,
+    routes_legal,
     routes_webhooks,
 ):
     app.include_router(module.router)

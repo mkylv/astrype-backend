@@ -42,3 +42,46 @@ async def delete_memory(
         sb.table("memory_chunks").delete().eq("user_id", user.id).execute()
         deleted.append("memory_chunks")
     return {"deleted": deleted}
+
+
+# Kullanıcının tüm verisini tuttuğu tablolar (hesap silmede temizlenir).
+_USER_TABLES = (
+    "chat_messages",
+    "memory_chunks",
+    "readings",
+    "relationships",
+    "daily_insight_cache",
+    "charts",
+    "subscriptions",
+)
+
+
+@router.delete("/account")
+async def delete_account(user: CurrentUser = Depends(current_user)):
+    """Hesabı ve TÜM kullanıcı verisini kalıcı siler (App Store/Play + KVKK/GDPR).
+
+    Önce veri tabloları, sonra profil, en son Supabase Auth kullanıcısı silinir.
+    (profiles → auth.users cascade olsa da her tabloyu açıkça temizleriz ki
+    denetlenebilir olsun ve cascade'e bağımlı kalmayalım.)
+    """
+    sb = get_supabase()
+    deleted: list[str] = []
+    for table in _USER_TABLES:
+        try:
+            sb.table(table).delete().eq("user_id", user.id).execute()
+            deleted.append(table)
+        except Exception:
+            pass  # tablo yoksa/boşsa devam et — silme akışı bloke olmamalı
+    try:
+        sb.table("profiles").delete().eq("id", user.id).execute()
+        deleted.append("profiles")
+    except Exception:
+        pass
+    # Auth kullanıcısını sil (service-role admin API).
+    auth_deleted = False
+    try:
+        sb.auth.admin.delete_user(user.id)
+        auth_deleted = True
+    except Exception:
+        pass
+    return {"deleted": deleted, "auth_user_deleted": auth_deleted}
