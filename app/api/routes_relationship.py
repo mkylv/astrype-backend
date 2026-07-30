@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends
 
 from app.api._helpers import resolve_birth
 from app.db.supabase_client import get_profile, get_supabase
-from app.deps import CurrentUser, current_user
+from app.deps import CurrentUser, require_feature
 from app.models import RelationshipRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -16,7 +17,9 @@ router = APIRouter(tags=["relationship"])
 
 
 @router.post("/relationship")
-async def relationship(body: RelationshipRequest, user: CurrentUser = Depends(current_user)):
+async def relationship(
+    body: RelationshipRequest, user: CurrentUser = Depends(require_feature("compatibility"))
+):
     sb = get_supabase()
     me = resolve_birth(sb, user.id, None)
     synastry_raw = await get_astro_provider().synastry(me, body.partner_birth)
@@ -43,4 +46,5 @@ async def relationship(body: RelationshipRequest, user: CurrentUser = Depends(cu
         sb, user.id, "relationship",
         f"İlişki ({body.partner_name or 'partner'}): {result.get('summary', '')}",
     )
-    return {"result": result}
+    charge = wallet.commit_charge(sb, user.id, "compatibility")
+    return {"result": result, "charge": charge}

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import ChatRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_chat
@@ -17,6 +18,10 @@ _HISTORY_LIMIT = 10
 @router.post("/chat")
 async def chat(body: ChatRequest, user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
+
+    # Lyra mesaj ücreti: abone günlük hakkı içindeyse ücretsiz, sonrası coin.
+    # Yetersiz bakiyede üretimden önce 402 döner.
+    charge = wallet.charge_lyra_message(sb, user.id)
 
     # Son N mesajı kronolojik history olarak al.
     hist = (
@@ -72,4 +77,4 @@ async def chat(body: ChatRequest, user: CurrentUser = Depends(current_user)):
 
     # Kriz sinyali işaretle (yanıt zaten safety promptuyla üretildi).
     crisis = is_crisis_signal(body.message)
-    return {"answer": answer, "crisis_support_suggested": crisis}
+    return {"answer": answer, "crisis_support_suggested": crisis, "charge": charge}

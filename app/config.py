@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 
+    # Coin ekonomisi ("Yıldız Tozu"). Kapalıyken erişim kapıları no-op'tur:
+    # hiçbir okuma ücretlendirilmez (mevcut davranış korunur). Flutter mağazası +
+    # RevenueCat dashboard ürünleri hazır olunca Render env'inde 'true' yapılır.
+    coins_enabled: bool = False
+
     # App
     env: str = "dev"
     cors_origins: str = "*"

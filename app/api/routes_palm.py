@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.db.supabase_client import get_profile, get_supabase
-from app.deps import CurrentUser, require_premium
+from app.deps import CurrentUser, require_feature
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -15,7 +16,7 @@ router = APIRouter(tags=["palm"])
 async def palm_reading(
     photo: UploadFile = File(...),
     note: str | None = Form(default=None),
-    user: CurrentUser = Depends(require_premium),
+    user: CurrentUser = Depends(require_feature("palm")),
 ):
     sb = get_supabase()
 
@@ -41,4 +42,5 @@ async def palm_reading(
         }
     ).execute()
     await remember(sb, user.id, "reading", f"El falı: {result.get('summary', '')}")
-    return {"lines": lines, "result": result, "photo_deleted": True}
+    charge = wallet.commit_charge(sb, user.id, "palm")
+    return {"lines": lines, "result": result, "photo_deleted": True, "charge": charge}

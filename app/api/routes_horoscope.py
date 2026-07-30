@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api._helpers import resolve_birth
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -88,16 +89,19 @@ async def horoscope_monthly(
     d = date.today()
     month = d.strftime("%Y-%m")
 
-    cached = _monthly_cache.get((sign_key, month))
-    if cached is not None:
-        return cached
+    # Aylık burç kullanıcı başına ayda bir ödenir (continuous → abonede ücretsiz).
+    unlock = f"horoscope_monthly:{user.id}:{month}"
+    wallet.check_access(sb, user.id, "horoscope_monthly", unlock_key=unlock)  # yetersizse 402
 
-    context = f"Burç: {name_tr}\nAy: {_TR_MONTHS[d.month - 1]} {d.year}"
-    content = await complete_json(prompts.HOROSCOPE_MONTHLY, context)
+    resp = _monthly_cache.get((sign_key, month))
+    if resp is None:
+        context = f"Burç: {name_tr}\nAy: {_TR_MONTHS[d.month - 1]} {d.year}"
+        content = await complete_json(prompts.HOROSCOPE_MONTHLY, context)
+        resp = {"sign_key": sign_key, "sign": name_tr, "month": month, "content": content}
+        _monthly_cache[(sign_key, month)] = resp
 
-    resp = {"sign_key": sign_key, "sign": name_tr, "month": month, "content": content}
-    _monthly_cache[(sign_key, month)] = resp
-    return resp
+    charge = wallet.commit_charge(sb, user.id, "horoscope_monthly", unlock)
+    return {**resp, "charge": charge}
 
 
 @router.get("/sky/today")

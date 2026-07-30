@@ -20,6 +20,7 @@ from app.api import (
     routes_relationship,
     routes_subconscious,
     routes_tarot,
+    routes_wallet,
     routes_webhooks,
     routes_yildizname,
 )
@@ -65,6 +66,7 @@ for module in (
     routes_yildizname,
     routes_subconscious,
     routes_readings,
+    routes_wallet,
     routes_legal,
     routes_webhooks,
 ):

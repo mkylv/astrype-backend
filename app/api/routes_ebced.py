@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import EbcedRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.gemini_client import complete_json_gemini
 from app.services.ai.memory import recall, remember
@@ -34,6 +35,10 @@ async def ebced(body: EbcedRequest, user: CurrentUser = Depends(current_user)):
     if not full_name:
         raise HTTPException(status_code=400, detail="full_name gerekli (profil veya body).")
     mother_name = (body.mother_name or "").strip()
+
+    # Ebced kişi başına bir kez ödenir (one_time).
+    unlock = f"ebced:{user.id}"
+    wallet.check_access(sb, user.id, "ebced", unlock_key=unlock)  # yetersizse 402
 
     # 1) Deterministik ebced dökümü (isim + anne adı).
     name_ebced = compute_ebced(full_name)
@@ -81,4 +86,5 @@ async def ebced(body: EbcedRequest, user: CurrentUser = Depends(current_user)):
         f"{name_ebced['dominant_element']}.",
     )
 
-    return {"ebced": name_ebced, "mother_ebced": mother_ebced, "result": result}
+    charge = wallet.commit_charge(sb, user.id, "ebced", unlock)
+    return {"ebced": name_ebced, "mother_ebced": mother_ebced, "result": result, "charge": charge}

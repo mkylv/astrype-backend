@@ -8,6 +8,7 @@ from app.api._helpers import resolve_birth
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import ChartRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -56,6 +57,9 @@ def _snapshot(raw: dict[str, Any]) -> dict[str, Any]:
 async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
     ensure_profile(sb, user.id)
+    # Doğum haritası kişi başına bir kez ödenir (one_time); tekrar açmak ücretsiz.
+    unlock = f"natal:{user.id}"
+    wallet.check_access(sb, user.id, "natal", unlock_key=unlock)  # yetersizse 402
     birth = resolve_birth(sb, user.id, body.birth)
     provider = get_astro_provider()
     raw = await provider.natal_chart(birth)
@@ -112,12 +116,16 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         svg = None
 
+    # Coin düşümü (kişi başına bir kez; idempotent).
+    charge = wallet.commit_charge(sb, user.id, "natal", unlock)
+
     # Ham sağlayıcı yorumu gösterilmez; kompakt özet + AI yorumu + görsel.
     return {
         "provider": provider.name,
         "snapshot": snap,
         "interpretation": interpretation,
         "svg": svg,
+        "charge": charge,
     }
 
 

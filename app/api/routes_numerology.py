@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import NumerologyRequest
-from app.services import numerology
+from app.services import numerology, wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -44,6 +44,10 @@ async def create_numerology(
     if not birth_date:
         raise HTTPException(status_code=400, detail="birth_date gerekli (profil veya body).")
 
+    # Numeroloji kişi başına bir kez ödenir (one_time).
+    unlock = f"numerology:{user.id}"
+    wallet.check_access(sb, user.id, "numerology", unlock_key=unlock)  # yetersizse 402
+
     # 1) Saf, deterministik numeroloji hesabı.
     numbers = numerology.full_profile(full_name, birth_date, date.today())
 
@@ -66,4 +70,5 @@ async def create_numerology(
         sb.table("readings").insert({**fallback, "type": "reading"}).execute()
     await remember(sb, user.id, "numerology", f"Numeroloji: {result.get('summary', '')}")
 
-    return {"numbers": numbers, "result": result}
+    charge = wallet.commit_charge(sb, user.id, "numerology", unlock)
+    return {"numbers": numbers, "result": result, "charge": charge}

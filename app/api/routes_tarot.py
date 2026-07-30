@@ -4,9 +4,9 @@ import json
 from fastapi import APIRouter, Depends
 
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
-from app.deps import CurrentUser, current_user
+from app.deps import CurrentUser, current_user, require_feature
 from app.models import TarotPullRequest, TarotSpreadRequest
-from app.services import tarot
+from app.services import tarot, wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -52,17 +52,22 @@ async def _reading(sb, user: CurrentUser, question: str | None, count: int):
     ).execute()
     await remember(sb, user.id, "reading", f"Tarot: {result.get('summary', '')}")
 
-    # İstemciye zengin kartlar + AI yorumu
-    return {"cards": cards, "result": result}
+    # İstemciye zengin kartlar + AI yorumu + coin düşümü
+    charge = wallet.commit_charge(sb, user.id, "tarot")
+    return {"cards": cards, "result": result, "charge": charge}
 
 
 @router.post("/tarot/spread")
-async def tarot_spread(body: TarotSpreadRequest, user: CurrentUser = Depends(current_user)):
+async def tarot_spread(
+    body: TarotSpreadRequest, user: CurrentUser = Depends(require_feature("tarot"))
+):
     sb = get_supabase()
     return await _reading(sb, user, body.question, count=3)
 
 
 @router.post("/tarot/pull")
-async def tarot_pull(body: TarotPullRequest, user: CurrentUser = Depends(current_user)):
+async def tarot_pull(
+    body: TarotPullRequest, user: CurrentUser = Depends(require_feature("tarot"))
+):
     sb = get_supabase()
     return await _reading(sb, user, body.question, count=1)

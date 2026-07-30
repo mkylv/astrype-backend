@@ -2,8 +2,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
-from app.deps import CurrentUser, current_user
+from app.deps import CurrentUser, require_feature
 from app.models import DreamRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -12,7 +13,9 @@ router = APIRouter(tags=["dream"])
 
 
 @router.post("/reading/dream")
-async def dream_reading(body: DreamRequest, user: CurrentUser = Depends(current_user)):
+async def dream_reading(
+    body: DreamRequest, user: CurrentUser = Depends(require_feature("dream"))
+):
     dream = (body.dream or "").strip()
     if len(dream) < 10:
         raise HTTPException(status_code=400, detail="Rüyanı birkaç cümleyle anlat.")
@@ -37,4 +40,5 @@ async def dream_reading(body: DreamRequest, user: CurrentUser = Depends(current_
         }
     ).execute()
     await remember(sb, user.id, "reading", f"Rüya ({body.mode}): {result.get('summary', '')}")
-    return {"result": result}
+    charge = wallet.commit_charge(sb, user.id, "dream")
+    return {"result": result, "charge": charge}

@@ -13,6 +13,7 @@ from app.api._helpers import resolve_birth
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import SubconsciousRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import recall, remember
 from app.services.ai.openai_client import complete_json
@@ -65,6 +66,9 @@ async def _natal_signs(sb, user_id: str) -> dict[str, Any]:
 async def subconscious(body: SubconsciousRequest, user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
     ensure_profile(sb, user.id)
+    # Bilinçaltı raporu kişi başına bir kez ödenir (one_time).
+    unlock = f"subconscious:{user.id}"
+    wallet.check_access(sb, user.id, "subconscious", unlock_key=unlock)  # yetersizse 402
     profile = get_profile(sb, user.id) or {}
 
     natal = await _natal_signs(sb, user.id)
@@ -113,9 +117,11 @@ async def subconscious(body: SubconsciousRequest, user: CurrentUser = Depends(cu
         f"ikincil '{SHADOWS[secondary]}', üçüncül '{SHADOWS[tertiary]}'. {summary}",
     )
 
+    charge = wallet.commit_charge(sb, user.id, "subconscious", unlock)
     return {
         "ranked": ranked,
         "counts": counts,
         "primary_shadow": {"key": primary, "name": SHADOWS[primary]},
         "result": result,
+        "charge": charge,
     }

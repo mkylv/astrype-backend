@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import YildiznameRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import recall, remember
 from app.services.ai.openai_client import complete_json
@@ -22,6 +23,9 @@ async def yildizname(body: YildiznameRequest, user: CurrentUser = Depends(curren
 
     sb = get_supabase()
     ensure_profile(sb, user.id)
+    # Yıldızname kişi başına bir kez ödenir (one_time — en pahalı analiz).
+    unlock = f"yildizname:{user.id}"
+    wallet.check_access(sb, user.id, "yildizname", unlock_key=unlock)  # yetersizse 402
     profile = get_profile(sb, user.id) or {}
 
     # 1) Deterministik taban: anne adının harf/ebced/unsur dökümü.
@@ -76,4 +80,5 @@ async def yildizname(body: YildiznameRequest, user: CurrentUser = Depends(curren
         sb, user.id, "reading",
         f"Yıldızname (anne: {mother}): {result.get('summary', '')}",
     )
-    return {"ebced": mother_ebced, "result": result}
+    charge = wallet.commit_charge(sb, user.id, "yildizname", unlock)
+    return {"ebced": mother_ebced, "result": result, "charge": charge}

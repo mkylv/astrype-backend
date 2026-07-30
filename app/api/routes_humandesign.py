@@ -7,6 +7,7 @@ from app.api._helpers import resolve_birth
 from app.db.supabase_client import ensure_profile, get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.models import ChartRequest, RelationshipRequest
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -23,6 +24,9 @@ router = APIRouter(tags=["human-design"])
 async def human_design(body: ChartRequest, user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
     ensure_profile(sb, user.id)
+    # İnsan Tasarımı kişi başına bir kez ödenir (one_time).
+    unlock = f"human_design:{user.id}"
+    wallet.check_access(sb, user.id, "human_design", unlock_key=unlock)  # yetersizse 402
     birth = resolve_birth(sb, user.id, body.birth)
 
     # 1) Bodygraph'ı lokal Swiss Ephemeris ile hesapla.
@@ -62,7 +66,8 @@ async def human_design(body: ChartRequest, user: CurrentUser = Depends(current_u
         f"{bodygraph['authority']} otorite.",
     )
 
-    return {"bodygraph": bodygraph, "result": result}
+    charge = wallet.commit_charge(sb, user.id, "human_design", unlock)
+    return {"bodygraph": bodygraph, "result": result, "charge": charge}
 
 
 @router.post("/human-design/transit")

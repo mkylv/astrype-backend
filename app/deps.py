@@ -91,7 +91,10 @@ async def current_user(
 async def require_premium(
     user: CurrentUser = Depends(current_user),
 ) -> CurrentUser:
-    """Premium/elite tier gerektiren uçlar için (kahve/el falı)."""
+    """(Eski) Premium/elite tier gerektiren uçlar için — coin modeline geçildi.
+
+    Geriye dönük uyum için tutuluyor; yeni uçlar require_feature kullanmalı.
+    """
     sb = get_supabase()
     tier = get_user_tier(sb, user.id)
     if tier not in ("premium", "elite"):
@@ -100,3 +103,25 @@ async def require_premium(
             detail="Bu özellik premium aboneliği gerektirir.",
         )
     return user
+
+
+def require_feature(feature: str):
+    """Coin/abonelik erişim kapısı üreten factory.
+
+    Üretimden ÖNCE bakiye/abonelik kontrolü yapar (yetersizse 402). Ücret
+    üretim BAŞARILI olunca route içinde `wallet.commit_charge(...)` ile düşülür
+    (idempotent). Kullanım:
+
+        @router.post("/reading/palm")
+        async def palm(user: CurrentUser = Depends(require_feature("palm"))):
+            ... üret ...
+            wallet.commit_charge(sb, user.id, "palm", idem_key)
+    """
+    from app.services import wallet
+
+    async def _dep(user: CurrentUser = Depends(current_user)) -> CurrentUser:
+        sb = get_supabase()
+        wallet.check_access(sb, user.id, feature)  # yetersiz bakiyede 402 fırlatır
+        return user
+
+    return _dep

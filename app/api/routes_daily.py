@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from app.api._helpers import resolve_birth
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
+from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_json
@@ -20,6 +21,10 @@ async def daily_insight(user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
     today = date_cls.today().isoformat()
 
+    # Günlük harita kullanıcı başına günde bir ödenir (continuous → abonede ücretsiz).
+    unlock = f"daily_map:{user.id}:{today}"
+    wallet.check_access(sb, user.id, "daily_map", unlock_key=unlock)  # yetersizse 402
+
     # 1) Cache: aynı kullanıcı + tarih için tek üretim.
     cached = (
         sb.table("daily_insight_cache")
@@ -30,7 +35,8 @@ async def daily_insight(user: CurrentUser = Depends(current_user)):
         .execute()
     )
     if cached.data:
-        return {"cached": True, "content": cached.data[0]["content"]}
+        charge = wallet.commit_charge(sb, user.id, "daily_map", unlock)
+        return {"cached": True, "content": cached.data[0]["content"], "charge": charge}
 
     # 2) Ham astro + Cosmic Memory context.
     profile = get_profile(sb, user.id)
@@ -52,4 +58,5 @@ async def daily_insight(user: CurrentUser = Depends(current_user)):
     # 5) Anlamlı özeti Cosmic Memory'ye yaz.
     await remember(sb, user.id, "chart", f"Günlük yorum ({today}): {content.get('summary', '')}")
 
-    return {"cached": False, "content": content}
+    charge = wallet.commit_charge(sb, user.id, "daily_map", unlock)
+    return {"cached": False, "content": content, "charge": charge}
