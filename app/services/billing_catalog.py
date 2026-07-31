@@ -61,10 +61,21 @@ SUBSCRIPTIONS: dict[str, dict] = {
 }
 
 # RevenueCat entitlement id -> uygulama tier eşlemesi.
+# NOT: RevenueCat entitlement lookup_key immutable; mevcut projede "Astrype Premium".
 ENTITLEMENT_TIER = {
     "premium": "premium",
+    "Astrype Premium": "premium",
     "elite": "elite",
 }
+
+# Test Store (prototip) kısa store_identifier alias'ları — üretim App Store'da
+# astrype_sub_* kullanılır; test satın almalarının da coin/tier üretmesi için.
+for _short, _full in (
+    ("weekly", "astrype_sub_weekly"),
+    ("monthly", "astrype_sub_monthly"),
+    ("yearly", "astrype_sub_yearly"),
+):
+    SUBSCRIPTIONS[_short] = SUBSCRIPTIONS[_full]
 
 
 def coin_pack(product_id: str) -> dict | None:
