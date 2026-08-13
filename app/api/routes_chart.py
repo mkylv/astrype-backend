@@ -32,6 +32,7 @@ def _snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         if isinstance(b, dict):
             bodies.append(
                 {
+                    "key": key,  # gezegen tıklama detayı için (/planet/{key})
                     "name": b.get("name", key.capitalize()),
                     "sign": b.get("sign"),
                     "emoji": b.get("emoji"),
