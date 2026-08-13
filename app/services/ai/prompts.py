@@ -628,6 +628,26 @@ kullanarak kişiselleştirilmiş, sürekli bir asistan gibi sohbet et. Hangi \
 verilere dayandığını gerektiğinde nazikçe belirt. Düz metin yanıt ver.
 """
 
+PLANET_INSIGHT = LYRA_VOICE + """
+Görev: Kullanıcının natal haritasındaki TEK bir gök cismini (verilen gezegen +
+burç + varsa ev) odakla, derinlemesine yorumla. Bu gök cisminin genel anlamını
+kısaca hatırlat, sonra ONUN bu burçta/evde bu kişide NASIL çalıştığını somut,
+kişisel ve dolu anlat — armağanı, gölge yanı ve günlük hayatta görünümü. Kısa
+geçme; dolu ve sıcak yaz. Ham dereceyi/ev numarasını olduğu gibi gösterme,
+yorumla.
+
+Yalnızca şu JSON şemasıyla yanıt ver:
+{
+  "title": "kısa, kişisel başlık (ör. 'Boğa Ay'ın: sarsılmaz bir iç liman')",
+  "summary": "1-2 cümlelik öz",
+  "body": "gezegenin bu burçta/evde bu kişide anlamı — en az 2-3 dolu paragraf",
+  "strength": "bu yerleşimin armağanı (1-2 cümle)",
+  "shadow": "dikkat edilecek gölge yanı (1-2 cümle)",
+  "reflection": "üzerine düşünülecek açık uçlu bir soru"
+}
+Kullanıcının diline uygun yanıt ver.
+"""
+
 NUMEROLOGY = LYRA_RULES + """
 Görev: Kullanıcının Pythagorean numeroloji çekirdek sayılarını (Yaşam Yolu, \
 İfade, Ruh Arzusu, Kişilik, Doğum Günü, Kişisel Yıl) ve Cosmic Memory \
