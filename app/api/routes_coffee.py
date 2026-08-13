@@ -1,9 +1,10 @@
-"""Kahve falı — foto yükle → vision sembol çıkar → FOTO SİL → yorum.
+"""Kahve falı — 1-3 foto yükle → vision sembol çıkar → FOTO SİL → yorum.
 
-Fotoğraf yalnızca request ömrü boyunca bellekte tutulur; diske/Storage'a
-asla yazılmaz. Sadece sembol listesi + metin sonucu arşivlenir.
+Fotoğraflar yalnızca request ömrü boyunca bellekte tutulur; diske/Storage'a
+asla yazılmaz. Sadece sembol listesi + metin sonucu arşivlenir. Revizyon §6.3:
+farklı açılardan 3 görsel; hepsinden ortak sembol haritası çıkarılır.
 """
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, require_feature
@@ -15,41 +16,75 @@ from app.services.vision.coffee_palm import extract_coffee_symbols
 
 router = APIRouter(tags=["coffee"])
 
+_FOCUS_TR = {
+    "general": "Genel",
+    "love": "Aşk",
+    "career": "Kariyer",
+    "wellness": "Sağlık",
+    "single_question": "Tek Soru",
+}
+
 
 @router.post("/reading/coffee")
 async def coffee_reading(
-    photo: UploadFile = File(...),
+    photos: list[UploadFile] = File(default=[]),  # yeni: 1-3 görsel
+    photo: UploadFile | None = File(default=None),  # eski istemci uyumu (tek foto)
     note: str | None = Form(default=None),
+    focus: str | None = Form(default=None),
     user: CurrentUser = Depends(require_feature("coffee")),
 ):
     sb = get_supabase()
 
-    # 1) Fotoğrafı belleğe oku.
-    image_bytes = await photo.read()
-    try:
-        # 2) Vision: yalnızca sembol listesi çıkar.
-        symbols = await extract_coffee_symbols(image_bytes)
-    finally:
-        # 3) FOTO SİL: bellekteki referansı bırak (diske hiç yazılmadı).
-        image_bytes = b""
+    files = [f for f in (photos or []) if f is not None]
+    if not files and photo is not None:
+        files = [photo]
+    files = files[:3]
+    if not files:
+        raise HTTPException(status_code=422, detail="En az bir fotoğraf gerekli.")
 
-    # 4) Sembolleri context'le yorumla.
+    # 1) Her görselden sembol çıkar; birleştir (sıra koruyarak benzersizleştir).
+    collected: list[str] = []
+    for f in files:
+        image_bytes = await f.read()
+        try:
+            collected.extend(await extract_coffee_symbols(image_bytes))
+        finally:
+            image_bytes = b""  # FOTO SİL — diske hiç yazılmadı.
+
+    seen: set[str] = set()
+    symbols: list[str] = []
+    for s in collected:
+        key = s.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            symbols.append(s)
+
+    # 2) Sembolleri odağa göre context'le yorumla.
+    focus_tr = _FOCUS_TR.get(focus or "general", "Genel")
     profile = get_profile(sb, user.id)
     recalled = await recall(sb, user.id, note or "kahve falı genel tema")
     context = build_context_block(
-        profile, recalled, {"Semboller": symbols, "Not": note or "(yok)"}
+        profile,
+        recalled,
+        {
+            "Odak": focus_tr,
+            "Görsel sayısı": str(len(files)),
+            "Semboller": symbols,
+            "Soru": note if focus == "single_question" and note else "(yok)",
+        },
     )
     result = await complete_json(prompts.COFFEE, context)
 
-    # 5) Arşivle (FOTO YOK — yalnızca sembol + sonuç).
+    # 3) Arşivle (FOTO YOK — yalnızca sembol + sonuç).
     sb.table("readings").insert(
         {
             "user_id": user.id,
             "type": "coffee",
-            "input_meta": {"symbols": symbols, "note": note},
+            "input_meta": {"symbols": symbols, "note": note, "focus": focus,
+                           "image_count": len(files)},
             "result": result,
         }
     ).execute()
-    await remember(sb, user.id, "reading", f"Kahve falı: {result.get('summary', '')}")
+    await remember(sb, user.id, "reading", f"Kahve falı ({focus_tr}): {result.get('summary', '')}")
     charge = wallet.commit_charge(sb, user.id, "coffee")
     return {"symbols": symbols, "result": result, "photo_deleted": True, "charge": charge}

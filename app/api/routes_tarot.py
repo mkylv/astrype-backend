@@ -13,31 +13,60 @@ from app.services.ai.openai_client import complete_json
 
 router = APIRouter(tags=["tarot"])
 
-_SPREAD_POSITIONS = ["past", "present", "future"]
+# Odağa göre pozisyon adları (revizyon §3).
+_POS_GENERAL = ["past", "present", "future"]
+_POS_FOCUSED = ["current_energy", "obstacle", "advice"]
+_POS_SINGLE_Q = ["root", "hidden_factor", "likely_path"]
+
+_FOCUS_TR = {
+    "general": "Genel",
+    "love": "Aşk",
+    "career": "Kariyer",
+    "wellness": "Sağlık",
+    "single_question": "Tek Soru",
+}
 
 
-async def _reading(sb, user: CurrentUser, question: str | None, count: int):
+def _positions(focus: str | None, count: int) -> list[str]:
+    if count == 1:
+        return ["single"]
+    if focus == "single_question":
+        return _POS_SINGLE_Q
+    if focus in ("love", "career", "wellness"):
+        return _POS_FOCUSED
+    return _POS_GENERAL
+
+
+async def _reading(
+    sb, user: CurrentUser, question: str | None, count: int, focus: str | None
+):
     ensure_profile(sb, user.id)
     profile = get_profile(sb, user.id) or {}
 
     # 1) Lokal desteden tekrarsız kart çek (görsel slug'lar dahil)
     cards = tarot.draw(count)
 
-    # 2) Temel anlamları OpenAI'a verip Astrype yorumu üret
+    # 2) Temel anlamları OpenAI'a verip Astrype yorumu üret (odağa göre)
+    positions = _positions(focus, count)
     recalled = await recall(sb, user.id, question or "tarot açılımı genel tema")
     base = []
     for i, c in enumerate(cards):
-        position = _SPREAD_POSITIONS[i] if count > 1 and i < len(_SPREAD_POSITIONS) else "single"
+        position = positions[i] if i < len(positions) else "single"
         base.append({
             "card": c["name"],
             "position": position,
             "reversed": c["orientation"] == "reversed",
             "meaning": c["meaning"],
         })
+    focus_tr = _FOCUS_TR.get(focus or "general", "Genel")
     context = build_context_block(
         profile,
         recalled,
-        {"Kartlar": json.dumps(base, ensure_ascii=False), "Soru": question or "(genel)"},
+        {
+            "Odak": focus_tr,
+            "Kartlar": json.dumps(base, ensure_ascii=False),
+            "Soru": question if focus == "single_question" and question else "(yok)",
+        },
     )
     result = await complete_json(prompts.TAROT, context)
 
@@ -46,11 +75,11 @@ async def _reading(sb, user: CurrentUser, question: str | None, count: int):
         {
             "user_id": user.id,
             "type": "tarot",
-            "input_meta": {"cards": base, "question": question},
+            "input_meta": {"cards": base, "question": question, "focus": focus},
             "result": result,
         }
     ).execute()
-    await remember(sb, user.id, "reading", f"Tarot: {result.get('summary', '')}")
+    await remember(sb, user.id, "reading", f"Tarot ({focus_tr}): {result.get('summary', '')}")
 
     # İstemciye zengin kartlar + AI yorumu + coin düşümü
     charge = wallet.commit_charge(sb, user.id, "tarot")
@@ -62,7 +91,7 @@ async def tarot_spread(
     body: TarotSpreadRequest, user: CurrentUser = Depends(require_feature("tarot"))
 ):
     sb = get_supabase()
-    return await _reading(sb, user, body.question, count=3)
+    return await _reading(sb, user, body.question, count=3, focus=body.focus)
 
 
 @router.post("/tarot/pull")
@@ -70,4 +99,4 @@ async def tarot_pull(
     body: TarotPullRequest, user: CurrentUser = Depends(require_feature("tarot"))
 ):
     sb = get_supabase()
-    return await _reading(sb, user, body.question, count=1)
+    return await _reading(sb, user, body.question, count=1, focus=body.focus)

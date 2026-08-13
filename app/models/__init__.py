@@ -40,11 +40,13 @@ class ChartRequest(BaseModel):
 
 class TarotPullRequest(BaseModel):
     question: Optional[str] = None
+    focus: Optional[str] = None  # general|love|career|wellness|single_question
 
 
 class TarotSpreadRequest(BaseModel):
     question: Optional[str] = None
     spread: Literal["three_card"] = "three_card"
+    focus: Optional[str] = None  # general|love|career|wellness|single_question
 
 
 class RelationshipRequest(BaseModel):
