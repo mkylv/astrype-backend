@@ -86,10 +86,20 @@ def _grant_coins_for_event(sb: Client, user_id: str, event: dict[str, Any]) -> N
 
 
 async def handle_event(sb: Client, payload: dict[str, Any]) -> None:
-    """Webhook payload'ını subscriptions + wallets tablolarına işle."""
+    """Webhook payload'ını subscriptions + wallets tablolarına işle.
+
+    Dayanıklı: RevenueCat TEST event'i ve profilde olmayan (sahte/silinmiş)
+    kullanıcı 500 değil, sessiz no-op olur — webhook her zaman 2xx döner.
+    """
+    import logging
+
+    log = logging.getLogger("astrype.revenuecat")
     event = payload.get("event", {})
     app_user_id = event.get("app_user_id")
-    if not app_user_id:
+    ev_type = event.get("type", "")
+
+    # RevenueCat panel "Send test event" — doğrulama için, işlenmez.
+    if ev_type == "TEST" or not app_user_id:
         return
 
     tier, is_active = _tier_from_event(event)
@@ -101,24 +111,26 @@ async def handle_event(sb: Client, payload: dict[str, Any]) -> None:
     if expires_ms:
         expires_at = datetime.fromtimestamp(expires_ms / 1000, tz=timezone.utc).isoformat()
 
-    sb.table("subscriptions").upsert(
-        {
-            "user_id": app_user_id,
-            "rc_app_user_id": app_user_id,
-            "tier": tier,
-            "is_active": is_active,
-            "expires_at": expires_at,
-            "product_id": product_id if sub_meta else None,
-            "period": sub_meta.get("period") if sub_meta else None,
-            "updated_at": "now()",
-        },
-        on_conflict="user_id",
-    ).execute()
+    # Abonelik senkronu — bilinmeyen user_id (FK) 500'e yol açmasın.
+    try:
+        sb.table("subscriptions").upsert(
+            {
+                "user_id": app_user_id,
+                "rc_app_user_id": app_user_id,
+                "tier": tier,
+                "is_active": is_active,
+                "expires_at": expires_at,
+                "product_id": product_id if sub_meta else None,
+                "period": sub_meta.get("period") if sub_meta else None,
+                "updated_at": "now()",
+            },
+            on_conflict="user_id",
+        ).execute()
+    except Exception:  # noqa: BLE001 — bilinmeyen kullanıcı / geçici hata
+        log.warning("subscription upsert atlandı (user=%s)", app_user_id)
 
     # Coin kazandırma (idempotent).
     try:
         _grant_coins_for_event(sb, app_user_id, event)
     except Exception:  # noqa: BLE001 — coin yatırma başarısızsa abonelik senkronu bozulmasın
-        import logging
-
-        logging.getLogger("astrype.revenuecat").exception("coin grant hatası")
+        log.warning("coin grant atlandı (user=%s)", app_user_id)
