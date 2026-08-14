@@ -5,7 +5,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response
 
 from app.api._helpers import resolve_birth
-from app.db.supabase_client import ensure_profile, get_profile, get_supabase
+from app.db.supabase_client import (
+    _first_row,
+    ensure_profile,
+    get_profile,
+    get_supabase,
+)
 from app.deps import CurrentUser, current_user
 from app.models import ChartRequest
 from app.services import wallet
@@ -54,37 +59,55 @@ def _snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@router.get("/chart")
+async def get_chart(user: CurrentUser = Depends(current_user)):
+    """Kullanıcının KAYITLI doğum haritasını döner (yeniden hesaplamadan).
+
+    İlk girişte hesaplanıp kaydedilir; her ziyarette buradan gösterilir.
+    """
+    sb = get_supabase()
+    row = _first_row(
+        sb.table("charts")
+        .select("display,raw_json")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not row:
+        return {"exists": False}
+    display = row.get("display")
+    if display:
+        return {"exists": True, **display}
+    # Eski kayıt (display yok): en azından snapshot türet.
+    return {
+        "exists": True,
+        "snapshot": _snapshot(row.get("raw_json") or {}),
+        "interpretation": None,
+        "svg": None,
+    }
+
+
 @router.post("/chart")
 async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_user)):
     sb = get_supabase()
     ensure_profile(sb, user.id)
-    # Doğum haritası kişi başına bir kez ödenir (one_time); tekrar açmak ücretsiz.
-    unlock = f"natal:{user.id}"
+
+    # Mevcut kayıtlı (kendi) harita var mı? İlk harita bir kez ödenir; yeniden
+    # oluşturma (kendisi ya da başkası) her seferinde stardust ister.
+    existing = _first_row(
+        sb.table("charts").select("id").eq("user_id", user.id).limit(1).execute()
+    )
+    is_first = body.for_self and existing is None
+    unlock = f"natal:{user.id}" if is_first else None
     wallet.check_access(sb, user.id, "natal", unlock_key=unlock)  # yetersizse 402
+
     birth = resolve_birth(sb, user.id, body.birth)
     provider = get_astro_provider()
     raw = await provider.natal_chart(birth)
-
-    sb.table("charts").insert(
-        {"user_id": user.id, "raw_json": raw, "provider": provider.name}
-    ).execute()
-
-    # Cosmic Memory: natal özetini hafızaya yaz ki AI sohbet haritayı bilsin.
     snap = _snapshot(raw)
-    bodies_txt = ", ".join(
-        f"{b['name']} {b['sign']}{' ℞' if b.get('retrograde') else ''}"
-        for b in snap.get("bodies", [])
-    )
-    summary = (
-        f"Natal harita — Güneş {snap.get('sun_sign')}, Ay {snap.get('moon_sign')}, "
-        f"Yükselen {snap.get('rising_sign') or '?'}. Gezegenler: {bodies_txt}."
-    )
-    try:
-        await remember(sb, user.id, "chart", summary)
-    except Exception:
-        pass  # hafıza yazımı başarısız olsa da chart yanıtı dönmeli
 
-    # Kişiselleştirilmiş AI natal yorumu (kompakt snapshot + Cosmic Memory'le).
+    # Kişiselleştirilmiş AI natal yorumu.
     interpretation: dict[str, Any] | None = None
     try:
         profile = get_profile(sb, user.id) or {}
@@ -96,36 +119,53 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     except Exception:
         interpretation = None  # yorum başarısız olsa da snapshot/svg dönmeli
 
-    # Kayıtlar arşivi: natal haritayı readings'e de yaz (kullanıcı sonra görsün).
-    record = {
-        "user_id": user.id,
-        "input_meta": {"place": birth.place, "date": str(birth.birth_date)},
-        "result": {"snapshot": snap, "interpretation": interpretation},
-    }
-    try:
-        sb.table("readings").insert({**record, "type": "chart"}).execute()
-    except Exception:
-        try:
-            sb.table("readings").insert({**record, "type": "reading"}).execute()
-        except Exception:
-            pass
-
-    # Natal wheel SVG (koyu tema — siyah zemin, beyaz/altın çizgiler).
+    # Natal wheel SVG (koyu tema).
     svg: str | None = None
     try:
         svg = (await provider.natal_chart_svg(birth, theme="dark")).decode("utf-8")
     except Exception:
         svg = None
 
-    # Coin düşümü (kişi başına bir kez; idempotent).
+    display = {"snapshot": snap, "interpretation": interpretation, "svg": svg}
+
+    if body.for_self:
+        # KENDİ haritası: eskiyi sil, yenisini kaydet (tek kanonik harita).
+        try:
+            sb.table("charts").delete().eq("user_id", user.id).execute()
+        except Exception:
+            pass
+        sb.table("charts").insert(
+            {
+                "user_id": user.id,
+                "raw_json": raw,
+                "provider": provider.name,
+                "display": display,
+            }
+        ).execute()
+        # Cosmic Memory: yalnız KENDİ haritası hafızaya (AI sohbet bilsin).
+        bodies_txt = ", ".join(
+            f"{b['name']} {b['sign']}{' ℞' if b.get('retrograde') else ''}"
+            for b in snap.get("bodies", [])
+        )
+        summary = (
+            f"Natal harita — Güneş {snap.get('sun_sign')}, Ay {snap.get('moon_sign')}, "
+            f"Yükselen {snap.get('rising_sign') or '?'}. Gezegenler: {bodies_txt}."
+        )
+        try:
+            await remember(sb, user.id, "chart", summary)
+        except Exception:
+            pass
+    # body.for_self False → BAŞKASI için: hesaba KAYDETME (tek seferlik).
+
     charge = wallet.commit_charge(sb, user.id, "natal", unlock)
 
-    # Ham sağlayıcı yorumu gösterilmez; kompakt özet + AI yorumu + görsel.
     return {
         "provider": provider.name,
         "snapshot": snap,
         "interpretation": interpretation,
         "svg": svg,
+        "saved": body.for_self,
+        "is_first": is_first,
         "charge": charge,
     }
 

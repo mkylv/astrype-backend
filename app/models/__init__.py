@@ -36,6 +36,9 @@ class ProfileIn(BaseModel):
 class ChartRequest(BaseModel):
     # Body opsiyonel: profilde doğum bilgisi varsa oradan da alınabilir.
     birth: Optional[BirthData] = None
+    # true: kullanıcının KENDİ haritası — kaydet/değiştir. false: başkası için —
+    # tek seferlik, hesaba kaydedilmez.
+    for_self: bool = True
 
 
 class TarotPullRequest(BaseModel):
