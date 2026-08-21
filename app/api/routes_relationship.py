@@ -24,12 +24,23 @@ async def relationship(
     me = resolve_birth(sb, user.id, None)
     synastry_raw = await get_astro_provider().synastry(me, body.partner_birth)
 
+    _KIND_TR = {
+        "relationship": "İlişki (aşk/romantik)",
+        "business": "İş ortaklığı",
+        "friendship": "Arkadaşlık",
+    }
+    kind_tr = _KIND_TR.get(body.kind or "relationship", "İlişki (aşk/romantik)")
+
     profile = get_profile(sb, user.id)
     recalled = await recall(sb, user.id, "ilişki uyumu ve ortak temalar")
     context = build_context_block(
         profile,
         recalled,
-        {"Partner": body.partner_name or "(isimsiz)", "Sinastri": json.dumps(synastry_raw)[:4000]},
+        {
+            "Karşılaştırma türü": kind_tr,
+            "Partner": body.partner_name or "(isimsiz)",
+            "Sinastri": json.dumps(synastry_raw)[:4000],
+        },
     )
     result = await complete_json(prompts.RELATIONSHIP, context)
 

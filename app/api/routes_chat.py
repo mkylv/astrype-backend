@@ -62,6 +62,38 @@ async def chat(body: ChatRequest, user: CurrentUser = Depends(current_user)):
             + (f"; {bodies}" if bodies else "")
         )
 
+    # Son okumaları (tarot/kahve/rüya/...) HER ZAMAN context'e ekle ki Lyra
+    # "ne çektim" gibi soruları hafızadan doğru yanıtlasın (recall'a bağlı kalmadan).
+    try:
+        recent = (
+            sb.table("readings")
+            .select("type,input_meta,result,created_at")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        lines = []
+        for r in (recent.data or []):
+            rtype = r.get("type", "okuma")
+            res = r.get("result") or {}
+            summ = ""
+            if isinstance(res, dict):
+                summ = str(res.get("summary") or res.get("direct_answer") or "")[:180]
+            meta = r.get("input_meta") or {}
+            extra_bit = ""
+            if rtype == "tarot" and isinstance(meta, dict):
+                cards = meta.get("cards") or []
+                names = ", ".join(str(c.get("card")) for c in cards if isinstance(c, dict) and c.get("card"))
+                if names:
+                    extra_bit = f" (kartlar: {names})"
+            if summ or extra_bit:
+                lines.append(f"{rtype}{extra_bit}: {summ}")
+        if lines:
+            extra["Son okumalar"] = "\n  - " + "\n  - ".join(lines)
+    except Exception:
+        pass  # okuma geçmişi alınamazsa context'siz devam
+
     context = build_context_block(profile, recalled, extra or None)
     system = f"{prompts.CHAT}\n\n# Kullanıcı Context\n{context}"
 

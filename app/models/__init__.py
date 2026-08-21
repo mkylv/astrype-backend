@@ -55,6 +55,7 @@ class TarotSpreadRequest(BaseModel):
 class RelationshipRequest(BaseModel):
     partner_name: Optional[str] = None
     partner_birth: BirthData
+    kind: Optional[str] = None  # relationship|business|friendship
 
 
 class ChatRequest(BaseModel):
