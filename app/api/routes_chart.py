@@ -99,8 +99,10 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
         sb.table("charts").select("id").eq("user_id", user.id).limit(1).execute()
     )
     is_first = body.for_self and existing is None
-    unlock = f"natal:{user.id}" if is_first else None
-    wallet.check_access(sb, user.id, "natal", unlock_key=unlock)  # yetersizse 402
+    # İlk (kendi) harita ÜCRETSİZ — onboarding değeri. Yeniden-oluşturma ya da
+    # başkası için harita her seferinde stardust ister.
+    if not is_first:
+        wallet.check_access(sb, user.id, "natal", unlock_key=None)  # yetersizse 402
 
     birth = resolve_birth(sb, user.id, body.birth)
     provider = get_astro_provider()
@@ -157,7 +159,11 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
             pass
     # body.for_self False → BAŞKASI için: hesaba KAYDETME (tek seferlik).
 
-    charge = wallet.commit_charge(sb, user.id, "natal", unlock)
+    if is_first:
+        charge = {"charged": False, "cost": 0,
+                  "balance": wallet.get_balance(sb, user.id)}
+    else:
+        charge = wallet.commit_charge(sb, user.id, "natal", None)
 
     return {
         "provider": provider.name,
