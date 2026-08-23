@@ -36,6 +36,18 @@ def _messages(system: str, user_content: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _model_kwargs(model: str, temperature: float) -> dict[str, Any]:
+    """Modele göre doğru parametreler.
+
+    GPT-5 (gpt-5.6-luna dahil) reasoning modelleri: temperature GÖNDERME (yalnız
+    default 1 kabul, aksi halde 400 → Gemini fallback) + `max_completion_tokens`
+    ile bol tavan ver (reasoning token'ları uzun çıktıyı kesmesin). Diğer
+    modeller (gpt-4o/gpt-4.1): temperature'ı ilet."""
+    if model.startswith("gpt-5"):
+        return {"max_completion_tokens": 16000}
+    return {"temperature": temperature}
+
+
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
 async def _openai_json(system: str, user_text: str) -> dict[str, Any]:
     s = get_settings()
@@ -43,7 +55,7 @@ async def _openai_json(system: str, user_text: str) -> dict[str, Any]:
         model=s.openai_chat_model,
         messages=_messages(system, user_text),
         response_format={"type": "json_object"},
-        temperature=0.8,
+        **_model_kwargs(s.openai_chat_model, 0.8),
     )
     return json.loads(resp.choices[0].message.content or "{}")
 
@@ -68,7 +80,7 @@ async def _openai_chat(system: str, history: list[dict[str, str]], message: str)
     resp = await _get_client().chat.completions.create(
         model=s.openai_chat_model,
         messages=msgs,
-        temperature=0.8,
+        **_model_kwargs(s.openai_chat_model, 0.8),
     )
     return resp.choices[0].message.content or ""
 

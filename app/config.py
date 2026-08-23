@@ -14,11 +14,11 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
-    # gpt-4.1: gpt-4o'ya göre ~4× daha uzun/derin yorum üretir ve uzunluk
-    # talimatlarını (natal 4-5 paragraf/bölüm) çok daha iyi izler; token başına
-    # daha ucuz. Sohbet kısa kalır çünkü CHAT prompt'u kısalık ister ve gpt-4.1
-    # talimata sadıktır.
-    openai_chat_model: str = "gpt-4.1"
+    # gpt-5.6-luna: reasoning modeli — en derin/akıllı yorumlar. Uzun okumalar
+    # ~60s (LyraProgress zamanlayıcısı gösterir), kısa sohbet ~2s. Client
+    # temperature GÖNDERMEZ (yalnız default 1) + max_completion_tokens verir
+    # (bkz. openai_client._model_kwargs). Vision (sembol çıkarımı) gpt-4o'da kalır.
+    openai_chat_model: str = "gpt-5.6-luna"
     openai_vision_model: str = "gpt-4o"
     openai_embed_model: str = "text-embedding-3-small"
 

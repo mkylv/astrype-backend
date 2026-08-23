@@ -701,3 +701,37 @@ Yalnızca şu JSON şemasıyla yanıt ver:
 }
 Ham sayıları aynen tekrar etme; onları sıcak, kişisel bir dile çevir. Her core_number için dolu bir yorum yaz, geçiştirme.
 """
+
+
+# ---- Uzunluk zorlaması (özellikle gpt-5.6-luna reasoning modeli kısa yazma
+# eğiliminde; net kelime hedefi olmadan yüzeysel geçiyor). CHAT ve glance
+# modülleri (daily/horoscope/sky/planet) hariç tutulur — onlar kısa/orta kalmalı.
+DEEP_LENGTH_XL = """
+
+UZUNLUK (ZORUNLU): Bu, uygulamanın EN DERİN okumalarından biri — kısa yazmak,
+özet geçmek KESİNLİKLE yasak. Her ana başlığı/bölümü (sections[].body) en az
+280-400 kelime, örnekli, sahneli ve doludizgin işle; toplamda en az 2500 kelimelik
+dolu bir metin üret. Bu uzunluğu JSON alanlarının İÇİNE yay, şema dışına metin
+yazma. Her paragraf yeni ve somut bir şey söylesin; asla yüzeyde kalma.
+"""
+
+DEEP_LENGTH = """
+
+UZUNLUK: Cömert ve dolu yaz — tek cümlelik geçiştirme yok. Her metin alanını
+gerçek, doyurucu paragraf(lar)la doldur; okuyan kişi derin, kişisel bir okuma
+aldığını hissetsin. Bu uzunluğu JSON alanlarının içine yay, şema dışına çıkma.
+"""
+
+NATAL += DEEP_LENGTH_XL
+YILDIZNAME += DEEP_LENGTH_XL
+HUMAN_DESIGN += DEEP_LENGTH_XL
+
+TAROT += DEEP_LENGTH
+RELATIONSHIP += DEEP_LENGTH
+COFFEE += DEEP_LENGTH
+PALM += DEEP_LENGTH
+FACE += DEEP_LENGTH
+DREAM += DEEP_LENGTH
+NUMEROLOGY += DEEP_LENGTH
+SUBCONSCIOUS += DEEP_LENGTH
+HD_COMPOSITE += DEEP_LENGTH
