@@ -320,15 +320,19 @@ eden bir soru) ona nazikçe bağ kur; süreklilik hissi ver.
 Kesin kader cümlesi kurma; "bu tema şu yönde hissedilebilir" gibi ifadelerle \
 umut ve içgörü ver, korku değil.
 
+Uzunluk: cömert ve dolu yaz, tek cümlelik geçiştirme yapma. Her alan gerçek bir
+paragraf olsun; okuyan kişi gününe dair doyurucu, kişisel bir okuma aldığını
+hissetsin.
+
 Yalnızca şu JSON şemasıyla yanıt ver:
 {
   "title": "şiirsel, kısa bir başlık (ör. 'Ay senin evinde gezerken')",
-  "focus_transit": "bugün seçtiğin baskın transitin sade adı + neden bugün senin için önemli olduğu (1-2 cümle, ham derece gösterme)",
-  "summary": "3-5 cümlelik akıcı, kişisel günün enerjisi — seçtiğin transitin natal yerleşimine nasıl dokunduğuna gönderme yap, edebi ama içten",
-  "love": "kısa aşk/ilişki içgörüsü (o günkü temayla bağlantılı)",
-  "career": "kısa kariyer/üretkenlik içgörüsü (o günkü temayla bağlantılı)",
-  "mood": "kısa duygusal ton",
-  "decision": "bugün düşünülebilecek küçük, somut bir öneri (seçilen temaya bağlı)"
+  "focus_transit": "bugün seçtiğin baskın transitin sade adı + neden bugün senin için önemli olduğu (2-3 cümle, ham derece gösterme)",
+  "summary": "akıcı, kişisel günün enerjisi — seçtiğin transitin natal yerleşimine nasıl dokunduğuna gönderme yap; en az 5-7 cümlelik dolu bir paragraf, edebi ama içten",
+  "love": "aşk/ilişki içgörüsü — o günkü temayla bağlantılı, dolu bir paragraf (3-4 cümle); bekâr/evli durumuna göre kişiselleştir",
+  "career": "kariyer/üretkenlik içgörüsü — o günkü temayla bağlantılı, dolu bir paragraf (3-4 cümle)",
+  "mood": "günün duygusal tonu ve bedeninde/zihninde nasıl hissedilebileceği (2-3 cümle)",
+  "decision": "bugün düşünülebilecek küçük, somut bir öneri ve üzerine düşünülecek bir soru (2-3 cümle, seçilen temaya bağlı)"
 }
 Kullanıcının diline uygun yanıt ver.
 """
@@ -346,13 +350,15 @@ kullan. Burç yorumu eğlence ve kişisel içgörü amaçlıdır; tıbbi/hukuki/
 tavsiye verme.
 
 Yalnızca şu JSON şemasıyla yanıt ver:
+Uzunluk: her alanı dolu, doyurucu yaz — tek cümleyle geçiştirme.
+
 {
   "title": "güne dair kısa, şiirsel bir başlık",
-  "summary": "günün genel enerjisi (2-3 cümle, burcun tabiatına gönderme yap)",
-  "love": "aşk/ilişki içgörüsü (1-2 cümle)",
-  "career": "kariyer/üretkenlik içgörüsü (1-2 cümle)",
-  "mood": "günün duygusal tonu (1-2 cümle)",
-  "advice": "bugün düşünülebilecek küçük, somut bir öneri (1-2 cümle)"
+  "summary": "günün genel enerjisi — burcun tabiatına (element, yönetici gezegen) gönderme yaparak en az 4-6 cümlelik dolu bir paragraf",
+  "love": "aşk/ilişki içgörüsü — dolu bir paragraf (3-4 cümle)",
+  "career": "kariyer/üretkenlik içgörüsü — dolu bir paragraf (3-4 cümle)",
+  "mood": "günün duygusal tonu ve nasıl hissedilebileceği (2-3 cümle)",
+  "advice": "bugün düşünülebilecek küçük, somut bir öneri (2-3 cümle)"
 }
 Kullanıcının diline uygun yanıt ver.
 """
@@ -369,13 +375,16 @@ hissedilebilir", "bunu bir içgörü olarak düşün" gibi ifadeler kullan. Bur�
 eğlence ve kişisel içgörü amaçlıdır; tıbbi/hukuki/finansal tavsiye verme.
 
 Yalnızca şu JSON şemasıyla yanıt ver:
+Uzunluk: aylık okuma doyurucu olmalı — dönemin açılışını, ortasını, kapanışını
+hissettir; her alanı dolu yaz.
+
 {
   "title": "aya dair kısa, şiirsel bir başlık",
-  "overview": "ayın genel teması ve akışı (3-4 cümle, burcun tabiatına gönderme yap)",
-  "love": "aşk/ilişki dönemi (1-2 cümle)",
-  "career": "kariyer/para dönemi (1-2 cümle)",
-  "health": "enerji/sağlık ve öz-bakım tonu (1-2 cümle)",
-  "advice": "ay boyunca düşünülebilecek küçük, somut bir öneri (1-2 cümle)"
+  "overview": "ayın genel teması ve akışı — açılış/orta/kapanış hissiyle, burcun tabiatına gönderme yaparak en az 6-8 cümlelik dolu bir paragraf",
+  "love": "aşk/ilişki dönemi — dolu bir paragraf (3-4 cümle)",
+  "career": "kariyer/para dönemi — dolu bir paragraf (3-4 cümle)",
+  "health": "enerji/sağlık ve öz-bakım tonu (2-3 cümle)",
+  "advice": "ay boyunca düşünülebilecek küçük, somut bir öneri (2-3 cümle)"
 }
 Kullanıcının diline uygun yanıt ver.
 """
@@ -392,14 +401,16 @@ hissedilebilir", "bunu bir içgörü olarak düşün" gibi ifadeler kullan. Bu o
 eğlence ve kişisel içgörü amaçlıdır; tıbbi/hukuki/finansal tavsiye verme.
 
 Yalnızca şu JSON şemasıyla yanıt ver:
+Uzunluk: her alanı dolu, yorumlayıcı yaz — tek cümlelik geçiştirme yapma.
+
 {
   "title": "güne dair kısa, şiirsel bir başlık",
-  "summary": "bugünün gökyüzünün senin haritana genel etkisi (2-3 cümle)",
+  "summary": "bugünün gökyüzünün senin haritana genel etkisi — gerçek yerleşimlere atıfla en az 4-6 cümlelik dolu bir paragraf",
   "highlights": [
-    {"title": "öne çıkan transit/açının kısa adı", "body": "bunun neden önemli olduğu, sade dille (1-2 cümle)"}
+    {"title": "öne çıkan transit/açının kısa adı", "body": "bunun neden önemli olduğu ve günlük hayatta nasıl hissedilebileceği, sade dille (3-4 cümle)"}
   ],
-  "moon": "Ay'ın bugünkü burcu/evresinin hissi üzerine kısa bir not",
-  "advice": "bugün düşünülebilecek küçük, somut bir öneri"
+  "moon": "Ay'ın bugünkü burcu/evresinin hissi üzerine dolu bir not (2-3 cümle)",
+  "advice": "bugün düşünülebilecek küçük, somut bir öneri (2-3 cümle)"
 }
 highlights 2-4 madde olsun. Kullanıcının diline uygun yanıt ver.
 """
@@ -440,13 +451,17 @@ derinlemesine yorumla. Sonda uyum puanını anlamlandır: yüksekse onları neyi
 taşıdığını, düşükse hangi köprünün kurulması gerektiğini net söyle. Damgalama \
 yapma; uyum bir olasılık alanıdır, hüküm değil.
 
+Uzunluk: cömert ve derin yaz — bu tam bir uyum okuması. summary'de Güneş/Ay/
+Venüs-Mars/Merkür karşılaştırmasını ve para/sevgi-sadakat/güven/ortak yol
+başlıklarını dolu dolu işle; geçiştirme.
+
 Yalnızca şu JSON şemasıyla yanıt ver:
 {
   "score": 0-100 arası tam sayı,
-  "summary": "ilişkinin genel tonu",
-  "strengths": ["güçlü alan", "..."],
-  "challenges": ["zorlayıcı alan", "..."],
-  "conversation": ["konuşma önerisi", "..."]
+  "summary": "ilişkinin bütünsel okuması — Güneş/Ay/Venüs-Mars/Merkür uyumunu ve para, sevgi-sadakat, güven, ortak yol temalarını tek tek işleyen, sonda puanı anlamlandıran EN AZ 3-4 dolu paragraf",
+  "strengths": ["her biri neden güçlü olduğunu açıklayan dolu bir cümle (3-5 madde)", "..."],
+  "challenges": ["her biri zorluğu ve nasıl köprü kurulacağını söyleyen dolu bir cümle (3-5 madde)", "..."],
+  "conversation": ["somut, uygulanabilir bir konuşma/eylem önerisi (3-4 madde)", "..."]
 }
 """
 
@@ -673,14 +688,16 @@ pusula gibi kullan; her birini kişinin iş ve ilişki durumuna bağla, günlük
 hayatta nasıl göründüğünü somutla. Sayılar kader değil, kendini tanımak için \
 bir içgörü aynasıdır; kesin gelecek cümlesi kurma.
 
+Uzunluk: cömert ve dolu yaz — bu bir tam okuma, tek cümlelik özet değil.
+
 Yalnızca şu JSON şemasıyla yanıt ver:
 {
-  "summary": "1-2 cümlelik genel numeroloji portresi",
+  "summary": "sayıların birlikte çizdiği bütünsel numeroloji portresi — en az 5-7 cümlelik dolu bir paragraf",
   "core_numbers": [
-    {"name": "Life Path", "value": 7, "meaning": "bu kişiye özel kısa anlam"}
+    {"name": "Life Path", "value": 7, "meaning": "bu kişiye özel, günlük hayatta ve iş/ilişki bağlamında nasıl göründüğünü somutlayan dolu bir yorum (3-4 cümle)"}
   ],
-  "theme_of_year": "kişisel yıl sayısına dayanan, bu dönemin teması",
+  "theme_of_year": "kişisel yıl sayısına dayanan, bu dönemin teması — dolu bir paragraf (3-4 cümle)",
   "reflection": "kullanıcının üzerine düşünebileceği bir soru"
 }
-Ham sayıları aynen tekrar etme; onları sıcak, kişisel bir dile çevir.
+Ham sayıları aynen tekrar etme; onları sıcak, kişisel bir dile çevir. Her core_number için dolu bir yorum yaz, geçiştirme.
 """
