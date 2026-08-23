@@ -14,7 +14,11 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
-    openai_chat_model: str = "gpt-4o"
+    # gpt-4.1: gpt-4o'ya göre ~4× daha uzun/derin yorum üretir ve uzunluk
+    # talimatlarını (natal 4-5 paragraf/bölüm) çok daha iyi izler; token başına
+    # daha ucuz. Sohbet kısa kalır çünkü CHAT prompt'u kısalık ister ve gpt-4.1
+    # talimata sadıktır.
+    openai_chat_model: str = "gpt-4.1"
     openai_vision_model: str = "gpt-4o"
     openai_embed_model: str = "text-embedding-3-small"
 
