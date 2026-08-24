@@ -268,17 +268,21 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     raw = await provider.natal_chart(birth)
     snap = _snapshot(raw)
 
-    # Kişiselleştirilmiş AI natal yorumu.
+    # HIZ: KENDİ haritasında AI yorumu burada üretilmez (Luna ~50-60s) — çark
+    # hemen döner, yorum `/chart/interpret` ile arkadan yüklenir. BAŞKASI için
+    # harita kaydedilmediğinden lazy yüklenemez → inline üretilir.
     interpretation: dict[str, Any] | None = None
-    try:
-        profile = get_profile(sb, user.id) or {}
-        recalled = await recall(sb, user.id, "natal harita kişilik temaları")
-        context = build_context_block(
-            profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
-        )
-        interpretation = await complete_json(prompts.NATAL, context)
-    except Exception:
-        interpretation = None  # yorum başarısız olsa da snapshot/svg dönmeli
+    if not body.for_self:
+        try:
+            profile = get_profile(sb, user.id) or {}
+            recalled = await recall(sb, user.id, "natal harita kişilik temaları")
+            context = build_context_block(
+                profile, recalled,
+                {"Natal özet": json.dumps(snap, ensure_ascii=False)},
+            )
+            interpretation = await complete_json(prompts.NATAL, context)
+        except Exception:
+            interpretation = None
 
     # Natal wheel SVG (koyu tema).
     svg: str | None = None
@@ -338,6 +342,50 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
         "is_first": is_first,
         "charge": charge,
     }
+
+
+@router.post("/chart/interpret")
+async def interpret_chart(user: CurrentUser = Depends(current_user)):
+    """KAYITLI haritanın AI yorumunu döner; yoksa üretip cache'ler (Luna ~50s).
+
+    POST /chart artık yorumu beklemeden hızlı döner; istemci çarkı gösterip bu
+    ucu çağırır (LyraProgress). İkinci çağrıda cache'ten anında gelir.
+    """
+    sb = get_supabase()
+    row = _first_row(
+        sb.table("charts")
+        .select("id,display,raw_json")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not row:
+        return {"interpretation": None}
+    display = row.get("display") or {}
+    existing = display.get("interpretation")
+    if existing:
+        return {"interpretation": existing}  # cache
+
+    raw = row.get("raw_json") or {}
+    snap = display.get("snapshot") or _snapshot(raw)
+    profile = get_profile(sb, user.id) or {}
+    recalled = await recall(sb, user.id, "natal harita kişilik temaları")
+    context = build_context_block(
+        profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
+    )
+    try:
+        interpretation = await complete_json(prompts.NATAL, context)
+    except Exception:
+        return {"interpretation": None}
+
+    # Kayıtlı display'e yaz (bir daha üretilmesin).
+    new_display = {**display, "interpretation": interpretation}
+    try:
+        sb.table("charts").update({"display": new_display}).eq("id", row["id"]).execute()
+    except Exception:
+        pass
+    return {"interpretation": interpretation}
 
 
 @router.get("/chart/svg")
