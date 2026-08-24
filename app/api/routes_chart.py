@@ -340,6 +340,7 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
         "snapshot": snap,
         "interpretation": interpretation,
         "svg": svg,
+        "geometry": display["geometry"],  # istemci çarkı hemen kursun
         "saved": body.for_self,
         "is_first": is_first,
         "charge": charge,
