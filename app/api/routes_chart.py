@@ -268,11 +268,13 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
     raw = await provider.natal_chart(birth)
     snap = _snapshot(raw)
 
-    # HIZ: KENDİ haritasında AI yorumu burada üretilmez (Luna ~50-60s) — çark
-    # hemen döner, yorum `/chart/interpret` ile arkadan yüklenir. BAŞKASI için
-    # harita kaydedilmediğinden lazy yüklenemez → inline üretilir.
+    # HIZ: yeni istemci `fast=true` + KENDİ haritasında AI yorumu burada
+    # üretilmez (Luna ~50-60s) — çark hemen döner, yorum `/chart/interpret` ile
+    # arkadan yüklenir. Eski istemciler (fast göndermez) ya da BAŞKASI için
+    # harita → inline üretilir (geri uyumlu).
     interpretation: dict[str, Any] | None = None
-    if not body.for_self:
+    lazy = body.fast and body.for_self
+    if not lazy:
         try:
             profile = get_profile(sb, user.id) or {}
             recalled = await recall(sb, user.id, "natal harita kişilik temaları")

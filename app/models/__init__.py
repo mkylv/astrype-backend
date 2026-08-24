@@ -39,6 +39,9 @@ class ChartRequest(BaseModel):
     # true: kullanıcının KENDİ haritası — kaydet/değiştir. false: başkası için —
     # tek seferlik, hesaba kaydedilmez.
     for_self: bool = True
+    # true: AI yorumunu atla (istemci /chart/interpret ile arkadan yükler → hızlı
+    # çark). Eski istemciler bayrağı göndermez → inline yorum (geri uyumlu).
+    fast: bool = False
 
 
 class TarotPullRequest(BaseModel):
