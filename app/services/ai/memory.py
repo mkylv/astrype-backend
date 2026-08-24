@@ -13,13 +13,20 @@ from app.services.ai.openai_client import embed
 _TOP_K = 6
 
 # Dil kodu -> yanıt dilinin insan-okur adı. Tüm AI modülleri tek noktadan
-# kullanıcının seçtiği dile bu talimatla uyar.
+# kullanıcının seçtiği dile bu talimatla uyar (20 dil).
 _LANG_NAMES = {
-    "en": "English",
-    "tr": "Türkçe",
-    "az": "Azərbaycanca",
-    "ru": "Русский",
-    "es": "Español",
+    "en": "English", "tr": "Türkçe", "es": "Español", "ar": "العربية",
+    "hi": "हिन्दी", "pt": "Português", "ru": "Русский", "fr": "Français",
+    "de": "Deutsch", "it": "Italiano", "id": "Bahasa Indonesia", "zh": "中文",
+    "ja": "日本語", "ko": "한국어", "fa": "فارسی", "ur": "اردو",
+    "az": "Azərbaycanca", "uk": "Українська", "pl": "Polski", "nl": "Nederlands",
+}
+
+# Birbirine çok yakın diller Luna'yı kaydırıyor (Türkçe sordu, Azerice yanıt).
+# Açık ayrım notu.
+_LANG_DISAMBIG = {
+    "tr": " (Türkiye Türkçesi — Azerice/Azərbaycanca DEĞİL)",
+    "az": " (Azərbaycan dili — Türkiyə türkcəsi DEYİL)",
 }
 
 
@@ -84,14 +91,14 @@ def build_context_block(
     if extra:
         for k, v in extra.items():
             parts.append(f"{k}: {v}")
-    # Kullanıcı Türkçe dışında bir dil seçtiyse, tüm modüllere tek noktadan
-    # güçlü bir dil talimatı ekle (Türkçe varsayılan olduğundan gerekmez).
+    # Dil talimatı HER dilde açıkça verilir (Türkçe dahil) — yoksa Luna yakın
+    # dile (Azerice) kayabiliyor. tr/az için ayrım notu eklenir.
     if profile:
-        lang = profile.get("language")
-        if lang and lang not in ("tr", "tr-TR"):
-            lang_name = _LANG_NAMES.get(lang, lang)
-            parts.append(
-                f"ÇOK ÖNEMLİ: Tüm yanıtını ve tüm JSON alanlarının metinlerini "
-                f"yalnızca {lang_name} dilinde yaz."
-            )
+        lang = (profile.get("language") or "en").split("-")[0]
+        lang_name = _LANG_NAMES.get(lang, lang)
+        note = _LANG_DISAMBIG.get(lang, "")
+        parts.append(
+            f"ÇOK ÖNEMLİ: Tüm yanıtını ve tüm JSON alanlarının metinlerini "
+            f"yalnızca {lang_name}{note} dilinde yaz."
+        )
     return "\n\n".join(parts) if parts else "(henüz context yok)"
