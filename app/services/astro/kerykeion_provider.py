@@ -67,6 +67,13 @@ _BODY_ATTRS = {
     "pluto": "pluto",
 }
 
+# Ev köşeleri (interaktif çark için). Kerykeion subject attribute adları.
+_HOUSE_ATTRS = [
+    "first_house", "second_house", "third_house", "fourth_house",
+    "fifth_house", "sixth_house", "seventh_house", "eighth_house",
+    "ninth_house", "tenth_house", "eleventh_house", "twelfth_house",
+]
+
 
 _VAR_DEF = re.compile(r"--([\w-]+)\s*:\s*([^;}]+)\s*[;}]")
 _VAR_USE = re.compile(r"var\(\s*--([\w-]+)\s*(?:,\s*([^)]+))?\)")
@@ -117,6 +124,8 @@ def _point_to_dict(point: Any) -> dict[str, Any]:
         "element": getattr(point, "element", None),
         "quality": getattr(point, "quality", None),
         "position": getattr(point, "position", None),
+        # abs_pos: 0-360 mutlak ekliptik boylam — interaktif çark için şart.
+        "abs_pos": getattr(point, "abs_pos", None),
     }
 
 
@@ -170,6 +179,15 @@ class KerykeionProvider(AstroProvider):
         bc: dict[str, Any] = {}
         for key, attr in _BODY_ATTRS.items():
             point = getattr(subject, attr, None)
+            if point is not None:
+                bc[key] = _point_to_dict(point)
+        # Ev köşeleri + ek açılar (MC/IC/DSC) — interaktif çark geometrisi için.
+        for attr in _HOUSE_ATTRS:
+            point = getattr(subject, attr, None)
+            if point is not None:
+                bc[attr] = _point_to_dict(point)
+        for key in ("medium_coeli", "imum_coeli", "descendant"):
+            point = getattr(subject, key, None)
             if point is not None:
                 bc[key] = _point_to_dict(point)
         bc["houses_system_name"] = getattr(subject, "houses_system_name", None)
