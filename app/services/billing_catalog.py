@@ -15,8 +15,8 @@ FIRST_PURCHASE_BONUS_RATE = 0.50
 # Aktif abonelere coin paketlerinde %20 indirim (mağaza fiyatında; ayrı offering).
 SUBSCRIBER_PACK_DISCOUNT_RATE = 0.20
 
-# Kayıt hediyesi.
-SIGNUP_BONUS_COINS = 100
+# Kayıt hediyesi (ilk gün "değer gördüm" hissi = dönüşüm kaldıracı).
+SIGNUP_BONUS_COINS = 200
 
 # Streak (7 gün üst üste giriş) ödülü + ödüllü reklam (opsiyonel).
 STREAK_BONUS_COINS = 20
@@ -44,15 +44,15 @@ COIN_PACKS: dict[str, dict] = {
 SUBSCRIPTIONS: dict[str, dict] = {
     "astrype_sub_weekly": {
         "period": "weekly",  "entitlement": "premium",
-        "coin_grant": 75,   "welcome_bonus": 0,    "lyra_daily": 30, "usd": 4.99,
+        "coin_grant": 150,  "welcome_bonus": 0,    "lyra_daily": 30, "usd": 4.99,
     },
     "astrype_sub_monthly": {
         "period": "monthly", "entitlement": "premium",
-        "coin_grant": 400,  "welcome_bonus": 0,    "lyra_daily": 50, "usd": 9.99,
+        "coin_grant": 700,  "welcome_bonus": 0,    "lyra_daily": 50, "usd": 9.99,
     },
     "astrype_sub_yearly": {
         "period": "yearly",  "entitlement": "premium",
-        "coin_grant": 400,  "welcome_bonus": 1000, "lyra_daily": 50, "usd": 49.99,
+        "coin_grant": 700,  "welcome_bonus": 1500, "lyra_daily": 50, "usd": 49.99,
         "trial_days": 3,
         # NOT: yıllık planda 400 coin AYLIK damlar; RevenueCat yılda bir RENEWAL
         # atacağı için aylık damlatma ayrı bir zamanlanmış işle (cron) yapılmalı.
