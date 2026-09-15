@@ -5,5 +5,12 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
+venv/
+env/
+*.p8
+*.pem
+*.key
 .pytest_cache/
 .DS_Store

@@ -68,3 +68,40 @@ context derleme).
 | `/readings` | GET | ✔ |
 | `/memory` | DELETE | ✔ (KVKK/GDPR) |
 | `/webhooks/revenuecat` | POST | secret |
+| `/legal/privacy`, `/legal/terms` | GET | — (public HTML) |
+| `/legal/source` | GET | — (307 → source repository) |
+
+## Source code
+
+This repository (https://github.com/mkylv/astrype-backend) is the complete
+source code of the **Astrype backend service** that the Astrype mobile apps talk
+to. As required by AGPL-3.0 §13, users of the network service are offered this
+source: the in-app Terms of Use page (`/legal/terms`) links to it, and
+`GET /legal/source` redirects to it (a stable link even if the repository moves).
+
+**Secrets are not part of the source.** All credentials (Supabase, OpenAI,
+RapidAPI, RevenueCat, …) are read only from environment variables at runtime.
+`.env.example` documents every variable; the real `.env` is git-ignored and must
+never be committed.
+
+The Flutter mobile app is a separate program that communicates with this service
+over HTTP and contains no AGPL code; it is not covered by this license.
+
+## License
+
+Copyright (C) 2026 Astrype.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the **GNU Affero General Public License, version 3**
+(`AGPL-3.0-only`). See [`LICENSE`](LICENSE).
+
+**Why AGPL-3.0:** local astrology calculations use
+[Kerykeion](https://github.com/g-battaglia/kerykeion) and
+[pyswisseph](https://astrorigin.com/pyswisseph), the Python bindings for the
+Swiss Ephemeris by Astrodienst AG, used under its AGPL option. Both are licensed
+under AGPL v3, which requires a service built on them that is offered over a
+network to publish its Corresponding Source under the same license. They ship
+the plain AGPLv3 text without an "or any later version" grant, so this project
+uses **-only** to match them.
+
+Third-party components and their licenses: [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).

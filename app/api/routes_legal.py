@@ -1,17 +1,26 @@
 """Yasal sayfalar — Gizlilik Politikası + Kullanım Şartları (herkese açık HTML).
 
 App Store / Google Play listeleme için kalıcı, kimlik doğrulaması gerektirmeyen
-URL'ler sunar: /legal/privacy, /legal/terms. Uygulama içinden de aynı URL'ler
+URL'ler sunar: /legal/privacy, /legal/terms, /legal/source. Uygulama içinden de aynı URL'ler
 açılır. İçerik eğlence/kişisel içgörü disclaimer'ını (Bölüm 16) içerir.
+
+AGPL-3.0 §13: Swiss Ephemeris (pyswisseph/Kerykeion) AGPL olduğundan ağ üzerinden
+hizmet alan kullanıcılara backend kaynak kodu sunulur — şartlar sayfasındaki
+"Açık kaynak" bölümü ve /legal/source yönlendirmesi bu yükümlülüğü karşılar.
 """
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter(tags=["legal"])
 
 # Güncelleme tarihi ve iletişim — yayın öncesi gerçek destek adresiyle doğrulanmalı.
 _UPDATED = "14 Temmuz 2026"
 _CONTACT = "destek@astrype.com"
+
+# Backend kaynak kodu (AGPL-3.0 §13). Repo taşınırsa yalnızca burası değişir;
+# uygulama ve dış bağlantılar kalıcı /legal/source adresini kullanabilir.
+_SOURCE_URL = "https://github.com/mkylv/astrype-backend"
+_LICENSE_NAME = "GNU Affero General Public License v3.0 (AGPL-3.0)"
 
 _STYLE = """
 :root{color-scheme:dark}
@@ -85,6 +94,11 @@ için <a href="mailto:{_CONTACT}">{_CONTACT}</a> adresine yazabilirsin.</p>
 
 <h2>7. Çocuklar</h2>
 <p>Astrype 13 yaşın altındaki kullanıcılara yönelik değildir.</p>
+
+<h2>8. Açık kaynak</h2>
+<p>Astrype sunucu yazılımının kaynak kodu {_LICENSE_NAME} lisansıyla herkese açıktır:
+<a href="{_SOURCE_URL}">{_SOURCE_URL}</a>. Kaynak kodu hiçbir kullanıcı verisi veya
+gizli anahtar içermez.</p>
 """,
 )
 
@@ -119,7 +133,21 @@ sistemi kötüye kullanarak kullanamazsın.</p>
 <p>Bu şartları zaman zaman güncelleyebiliriz. Önemli değişiklikleri uygulama içinden
 duyururuz.</p>
 
-<h2>6. İletişim</h2>
+<h2>6. Açık kaynak / Kaynak kodu</h2>
+<p>Astrype'ın sunucu (backend) yazılımı açık kaynaktır ve
+<strong>{_LICENSE_NAME}</strong> lisansı altında yayınlanır. Bu hizmetle ağ üzerinden
+etkileşime giren her kullanıcı, hizmeti çalıştıran yazılımın tam kaynak koduna
+ücretsiz olarak erişebilir, onu inceleyebilir, değiştirebilir ve lisans koşulları
+çerçevesinde yeniden dağıtabilir:</p>
+<p><a href="{_SOURCE_URL}">{_SOURCE_URL}</a></p>
+<p>Kalıcı bağlantı: <a href="/legal/source">/legal/source</a>. Astroloji hesaplamaları,
+Astrodienst AG'nin Swiss Ephemeris kütüphanesini (AGPL seçeneğiyle) ve Kerykeion'u
+kullanır; üçüncü taraf lisansları depodaki <code>THIRD_PARTY_LICENSES.md</code>
+dosyasında listelenir. Lisans, yazılımın "olduğu gibi" ve herhangi bir garanti
+olmaksızın sunulduğunu belirtir. Bu bölüm yalnızca sunucu yazılımının kaynak kodunu
+kapsar; Astrype adı ve logosu bu lisansla verilmiş bir marka kullanım hakkı değildir.</p>
+
+<h2>7. İletişim</h2>
 <p>Sorular için: <a href="mailto:{_CONTACT}">{_CONTACT}</a></p>
 """,
 )
@@ -133,3 +161,9 @@ async def privacy_policy() -> str:
 @router.get("/legal/terms", response_class=HTMLResponse)
 async def terms_of_use() -> str:
     return _TERMS
+
+
+@router.get("/legal/source", status_code=307, include_in_schema=True)
+async def source_code() -> RedirectResponse:
+    """AGPL-3.0 §13 — backend Corresponding Source'a kalıcı yönlendirme."""
+    return RedirectResponse(_SOURCE_URL, status_code=307)
