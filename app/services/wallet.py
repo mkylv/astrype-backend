@@ -22,7 +22,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.config import get_settings
-from app.db.supabase_client import _first_row, get_user_tier
+from app.db.supabase_client import _first_row, get_user_tier, subscription_is_current
 from app.services import billing_catalog as cat
 
 # Fiyat kataloğu, DB'de değişebildiği için kısa süreli önbelleklenir.
@@ -57,7 +57,7 @@ def get_balance(sb: Client, user_id: str) -> int:
 def _subscription_row(sb: Client, user_id: str) -> dict[str, Any] | None:
     res = (
         sb.table("subscriptions")
-        .select("tier,is_active,product_id")
+        .select("tier,is_active,expires_at,product_id")
         .eq("user_id", user_id)
         .limit(1)
         .execute()
@@ -102,7 +102,7 @@ def check_access(
         # Coin ekonomisi kapalı: erişim serbest, ücret yok (mevcut davranış).
         return Access(feature, price, category, False, "disabled", get_balance(sb, user_id))
     sub = _subscription_row(sb, user_id)
-    subscriber = bool(sub and sub.get("is_active") and sub.get("tier") in ("premium", "elite"))
+    subscriber = bool(subscription_is_current(sub) and sub.get("tier") in ("premium", "elite"))
     balance = get_balance(sb, user_id)
 
     if category == "free":
@@ -137,7 +137,7 @@ def commit_charge(
         return {"charged": False, "cost": 0, "balance": get_balance(sb, user_id)}
     price, category = feature_price(sb, feature)
     sub = _subscription_row(sb, user_id)
-    subscriber = bool(sub and sub.get("is_active") and sub.get("tier") in ("premium", "elite"))
+    subscriber = bool(subscription_is_current(sub) and sub.get("tier") in ("premium", "elite"))
 
     amount = price
     if category == "free":
@@ -220,7 +220,7 @@ def charge_lyra_message(
         return {"charged": False, "cost": 0, "balance": get_balance(sb, user_id),
                 "daily_used": 0, "daily_limit": 0}
     sub = _subscription_row(sb, user_id)
-    subscriber = bool(sub and sub.get("is_active") and sub.get("tier") in ("premium", "elite"))
+    subscriber = bool(subscription_is_current(sub) and sub.get("tier") in ("premium", "elite"))
     daily_limit = cat.lyra_daily_limit(sub.get("product_id") if sub else None) if subscriber else 0
 
     today = _dt.now(tz=timezone.utc).date().isoformat()
