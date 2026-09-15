@@ -1,4 +1,6 @@
 """Cosmic Memory'li AI sohbet."""
+import logging
+
 from fastapi import APIRouter, Depends
 
 from app.db.supabase_client import get_profile, get_supabase
@@ -8,6 +10,7 @@ from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.memory import build_context_block, recall, remember
 from app.services.ai.openai_client import complete_chat
+from app.services.ai.resilience import AIUnavailableError
 from app.services.ai.safety import is_crisis_signal
 
 router = APIRouter(tags=["chat"])
@@ -97,7 +100,20 @@ async def chat(body: ChatRequest, user: CurrentUser = Depends(current_user)):
     context = build_context_block(profile, recalled, extra or None)
     system = f"{prompts.CHAT}\n\n# Kullanıcı Context\n{context}"
 
-    answer = await complete_chat(system, history, body.message)
+    try:
+        answer = await complete_chat(system, history, body.message)
+    except AIUnavailableError:
+        # Ücret üretimden ÖNCE düşülüyor (charge_lyra_message); AI yanıt
+        # veremediyse (timeout/sağlayıcı hatası) kullanıcıdan alınan coin'i iade et.
+        if charge.get("charged") and charge.get("cost"):
+            try:
+                wallet.grant(sb, user.id, int(charge["cost"]), "refund",
+                             metadata={"module": "lyra_chat", "cause": "ai_unavailable"})
+            except Exception:
+                logging.getLogger("astrype.wallet").warning(
+                    "lyra_chat iadesi başarısız (%s)", user.id
+                )
+        raise
 
     # Kullanıcı + asistan mesajlarını kaydet.
     sb.table("chat_messages").insert(

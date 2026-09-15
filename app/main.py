@@ -1,6 +1,7 @@
 """Astrype Backend — FastAPI app, router mount, CORS."""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import (
     routes_chart,
@@ -26,6 +27,7 @@ from app.api import (
     routes_yildizname,
 )
 from app.config import get_settings
+from app.services.ai.resilience import AIUnavailableError, request_deadline
 
 settings = get_settings()
 
@@ -42,6 +44,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class AIRequestDeadlineMiddleware:
+    """Her HTTP isteğine AI çağrıları için mutlak toplam tavan koyar
+    (AI_REQUEST_DEADLINE). Birden çok AI çağrısı yapan uçlar (ör. kahve falı:
+    3 vision + yorum) da bu süreyi paylaşır; AI dışı kodu etkilemez."""
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        with request_deadline(get_settings().ai_request_deadline_seconds):
+            return await self.app(scope, receive, send)
+
+
+app.add_middleware(AIRequestDeadlineMiddleware)
+
+
+@app.exception_handler(AIUnavailableError)
+async def _ai_unavailable_handler(_: Request, exc: AIUnavailableError):
+    # Kısa, sızıntısız mesaj (sağlayıcı/URL/key detayı yok). Ücret düşülmez:
+    # route'lar commit_charge'ı üretim BAŞARILI olduktan sonra çağırır.
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": {"code": exc.code, "message": exc.public_message}},
+    )
 
 
 @app.get("/health", tags=["health"])

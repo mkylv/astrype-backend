@@ -26,6 +26,25 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    # AI zaman aşımı / retry bütçesi (saniye). Takılan bir istek dakikalarca
+    # asılı kalmasın diye her katman sınırlıdır:
+    #   - OpenAI SDK kendi retry'ı KAPALI (max_retries=0); retry tek yerde (tenacity).
+    #   - Deneme başı okuma zaman aşımı: kısa çağrılar (sohbet/vision) AI_TIMEOUT,
+    #     uzun JSON yorumları (natal ~80s Luna) AI_LONG_TIMEOUT.
+    #   - Gemini fallback istek başı GEMINI_TIMEOUT.
+    #   - Bir AI üretiminin TOPLAM tavanı (birincil + retry + fallback):
+    #     AI_REQUEST_BUDGET (sohbet/vision) / AI_LONG_REQUEST_BUDGET (JSON yorum).
+    #   - Tek HTTP isteğinin tüm AI çağrılarının toplam tavanı: AI_REQUEST_DEADLINE
+    #     (ör. kahve falı: 3 vision + 1 yorum).
+    ai_connect_timeout_seconds: float = 10.0
+    ai_timeout_seconds: float = 60.0
+    ai_long_timeout_seconds: float = 150.0
+    gemini_timeout_seconds: float = 60.0
+    ai_max_attempts: int = 2
+    ai_request_budget_seconds: float = 120.0
+    ai_long_request_budget_seconds: float = 270.0
+    ai_request_deadline_seconds: float = 360.0
+
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 

@@ -8,24 +8,74 @@ import json
 from typing import Any
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
+from app.services.ai.resilience import (
+    ProviderHTTPError,
+    http_timeout,
+    retry_transient,
+    run_with_budget,
+)
 from app.services.ai.safety import SAFETY_SYSTEM_PROMPT
 
-_TIMEOUT = httpx.Timeout(60.0)
 _BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+async def _generate(payload: dict[str, Any]) -> dict[str, Any]:
+    """generateContent POST. Key URL'de DEĞİL `x-goog-api-key` header'ında;
+    hata mesajları URL/key içermez (log'a sızmasın)."""
+    s = get_settings()
+    url = f"{_BASE}/{s.gemini_model}:generateContent"
+    headers = {"x-goog-api-key": s.gemini_api_key}
+    timeout = http_timeout(s.gemini_timeout_seconds, s.ai_connect_timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post(url, json=payload, headers=headers)
+    if r.status_code >= 400:
+        raise ProviderHTTPError("Gemini", r.status_code)
+    return r.json()
+
+
+def _retrying(fn):
+    s = get_settings()
+    return retry_transient(
+        fn, attempts=s.ai_max_attempts, max_delay=s.gemini_timeout_seconds
+    )
+
+
 async def complete_json_gemini(system_prompt: str, context: str) -> dict[str, Any]:
+    """Doğrudan Gemini JSON yorumu (Ebced) — toplam bütçeyle sınırlı.
+
+    Bütçe aşımı/hata → AITimeoutError/AIUnavailableError (main.py 504/503).
+    """
+    s = get_settings()
+    return await run_with_budget(
+        lambda: json_gemini_retrying(system_prompt, context),
+        budget=s.ai_long_request_budget_seconds,
+        label="gemini-json",
+    )
+
+
+async def json_gemini_retrying(system_prompt: str, context: str) -> dict[str, Any]:
+    """OpenAI fallback'i için: geçici hatalarda sınırlı retry, bütçe dışarıda."""
+    return await _retrying(lambda: _json_once(system_prompt, context))
+
+
+async def vision_json_gemini(prompt: str, image_bytes: bytes) -> dict[str, Any]:
+    return await _retrying(lambda: _vision_once(prompt, image_bytes))
+
+
+async def complete_text_gemini(
+    system_prompt: str, history: list[dict[str, str]], message: str
+) -> str:
+    return await _retrying(lambda: _text_once(system_prompt, history, message))
+
+
+async def _json_once(system_prompt: str, context: str) -> dict[str, Any]:
     """Gemini'ye sistem promptu + context gönderip JSON yanıt döner.
 
     Safety katmanı her zaman önce eklenir (OpenAI client'ı ile aynı kural).
     """
-    s = get_settings()
     system = f"{SAFETY_SYSTEM_PROMPT}\n\n{system_prompt}"
-    url = f"{_BASE}/{s.gemini_model}:generateContent?key={s.gemini_api_key}"
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": context}]}],
@@ -37,31 +87,25 @@ async def complete_json_gemini(system_prompt: str, context: str) -> dict[str, An
             "thinkingConfig": {"thinkingBudget": 0},
         },
     }
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        r = await client.post(url, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    data = await _generate(payload)
 
     try:
         parts = data["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts)
     except (KeyError, IndexError) as exc:
-        raise RuntimeError(f"Gemini yanıtı çözümlenemedi: {data}") from exc
+        raise RuntimeError("Gemini yanıtı çözümlenemedi") from exc
 
     return _parse_json(text)
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-async def vision_json_gemini(prompt: str, image_bytes: bytes) -> dict[str, Any]:
+async def _vision_once(prompt: str, image_bytes: bytes) -> dict[str, Any]:
     """Görselden JSON çıkarım (OpenAI vision çökerse fallback).
 
     Foto yalnızca istek gövdesinde base64 olarak gider; saklanmaz.
     """
     import base64
 
-    s = get_settings()
     system = f"{SAFETY_SYSTEM_PROMPT}\n\n{prompt}"
-    url = f"{_BASE}/{s.gemini_model}:generateContent?key={s.gemini_api_key}"
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [
@@ -85,26 +129,20 @@ async def vision_json_gemini(prompt: str, image_bytes: bytes) -> dict[str, Any]:
             "thinkingConfig": {"thinkingBudget": 0},
         },
     }
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        r = await client.post(url, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    data = await _generate(payload)
     try:
         parts = data["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts)
     except (KeyError, IndexError) as exc:
-        raise RuntimeError(f"Gemini vision yanıtı çözümlenemedi: {data}") from exc
+        raise RuntimeError("Gemini vision yanıtı çözümlenemedi") from exc
     return _parse_json(text)
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-async def complete_text_gemini(
+async def _text_once(
     system_prompt: str, history: list[dict[str, str]], message: str
 ) -> str:
     """Düz metin sohbet yanıtı (OpenAI çökerse chat fallback'i)."""
-    s = get_settings()
     system = f"{SAFETY_SYSTEM_PROMPT}\n\n{system_prompt}"
-    url = f"{_BASE}/{s.gemini_model}:generateContent?key={s.gemini_api_key}"
     contents = [
         {
             "role": "model" if m.get("role") == "assistant" else "user",
@@ -122,15 +160,12 @@ async def complete_text_gemini(
             "thinkingConfig": {"thinkingBudget": 0},
         },
     }
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        r = await client.post(url, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    data = await _generate(payload)
     try:
         parts = data["candidates"][0]["content"]["parts"]
         return "".join(p.get("text", "") for p in parts)
     except (KeyError, IndexError) as exc:
-        raise RuntimeError(f"Gemini yanıtı çözümlenemedi: {data}") from exc
+        raise RuntimeError("Gemini yanıtı çözümlenemedi") from exc
 
 
 def _parse_json(text: str) -> dict[str, Any]:

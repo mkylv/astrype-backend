@@ -329,7 +329,9 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
             pass
     # body.for_self False → BAŞKASI için: hesaba KAYDETME (tek seferlik).
 
-    if is_first:
+    if is_first or (not lazy and interpretation is None):
+        # İlk harita ücretsiz. Inline yorum beklenip üretilemediyse
+        # (AI timeout/hata) de ücret düşülmez.
         charge = {"charged": False, "cost": 0,
                   "balance": wallet.get_balance(sb, user.id)}
     else:
