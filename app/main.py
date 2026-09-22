@@ -1,7 +1,10 @@
 """Astrype Backend — FastAPI app, router mount, CORS."""
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import (
     routes_chart,
@@ -20,6 +23,7 @@ from app.api import (
     routes_profile,
     routes_readings,
     routes_relationship,
+    routes_site,
     routes_subconscious,
     routes_tarot,
     routes_wallet,
@@ -100,6 +104,14 @@ for module in (
     routes_readings,
     routes_wallet,
     routes_legal,
+    routes_site,
     routes_webhooks,
 ):
     app.include_router(module.router)
+
+# Web sitesi görselleri (landing + destek sayfası): /static/img/...
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).parent / "static"),
+    name="static",
+)
