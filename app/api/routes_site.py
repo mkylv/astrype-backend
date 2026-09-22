@@ -17,9 +17,20 @@ ve alt bilgideki bağlantılar geçerli dille /legal/... adreslerine gider.
   * Kahve/el/yüz falı fotoğrafı analizden hemen sonra sunucudan silinir — açıkça yazılır.
   * Uydurma referans, kullanıcı sayısı, basın logosu veya aciliyet oyunu yok.
 
+Sunum (2026 revizyonu — görsel + hareket katmanı):
+  * Şablon motoru yok; her şey düz f-string (Jinja2 kurulu değil).
+  * Marka kilidi (ikon + kelime işareti) satır içi SVG olarak çizilir.
+  * Hareket üç katmanda: canvas yıldız alanı, CSS ile dönen zodyak çarkı ve
+    IntersectionObserver tabanlı scroll-reveal. Üçü de
+    ``prefers-reduced-motion`` altında ve JavaScript kapalıyken tamamen devre
+    dışı kalır; sayfa hareketsizken de eksiksiz görünür (içerik asla
+    opacity:0 ile beklemez — gizleme sınıfı yalnızca JS ekliyse eklenir).
+
 Görseller ``app/static/img`` altında (StaticFiles ile /static'ten sunulur).
 """
 from __future__ import annotations
+
+import math
 
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import HTMLResponse
@@ -31,12 +42,14 @@ router = APIRouter(tags=["site"])
 SITE_LANGS = ("en", "tr")
 SITE_DEFAULT_LANG = "en"
 
-CONTACT_EMAIL = "destek@astrype.com"
+# Tek kaynak: her iki sayfadaki bütün mailto bağlantıları buradan gelir.
+CONTACT_EMAIL = "support@astrype.com"
 
 # --- Mağaza bağlantıları -------------------------------------------------
 # Uygulama henüz yayında değil. Yayınlandığında YALNIZCA bu iki satır
 # doldurulur; şablon otomatik olarak "yakında" rozetini gerçek bağlantıya
-# çevirir. Boş string = yayında değil.
+# çevirir (rozet grileşmesi kalkar, <span> yerine <a> gelir). Boş string =
+# yayında değil.
 APP_STORE_URL = ""
 PLAY_STORE_URL = ""
 
@@ -44,144 +57,556 @@ PLAY_STORE_URL = ""
 APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions"
 GOOGLE_SUBSCRIPTIONS_URL = "https://play.google.com/store/account/subscriptions"
 
+# Google Play resmî rozeti (play.google.com/intl/en_us/badges/... adresinden
+# indirildi, değiştirilmeden sunulur). Apple rozeti Apple'ın pazarlama
+# kaynaklarına kayıtlı erişim gerektirdiğinden aşağıda satır içi SVG olarak
+# çizilir; yayın öncesi resmî varlıkla değiştirilmelidir.
+PLAY_BADGE_IMG = "/static/img/play-badge.png"
+
+
+# --------------------------------------------------------------------------
+# Satır içi SVG — marka kilidi, zodyak çarkı, mağaza rozetleri
+# --------------------------------------------------------------------------
+
+
+def _brand_mark(uid: str, size: int = 34) -> str:
+    """Uygulama ikonunun (altın kadran + kuyruklu yıldız) vektör karşılığı.
+
+    32-36 px'te okunur kalması için kadran sadeleştirildi: ince 24 çentik
+    yerine 8 belirgin çentik, kalın altın çember ve merkezde küçük güneş."""
+    ticks = []
+    for i in range(8):
+        a = math.radians(i * 45)
+        r1, r2 = 15.4, 12.2
+        ticks.append(
+            '<line x1="{:.2f}" y1="{:.2f}" x2="{:.2f}" y2="{:.2f}" stroke="#D6A93A" '
+            'stroke-width="1.5" stroke-linecap="round" opacity=".9" />'.format(
+                22 + r1 * math.sin(a), 26 - r1 * math.cos(a),
+                22 + r2 * math.sin(a), 26 - r2 * math.cos(a),
+            )
+        )
+    return (
+        f'<svg class="mark" width="{size}" height="{size}" viewBox="0 0 48 48" '
+        'aria-hidden="true" focusable="false">'
+        f'<defs><radialGradient id="{uid}g" cx="42%" cy="38%" r="76%">'
+        '<stop offset="0" stop-color="#2B2258" /><stop offset="1" stop-color="#0A0813" />'
+        "</radialGradient></defs>"
+        f'<rect width="48" height="48" rx="12" fill="url(#{uid}g)" />'
+        '<rect x="0.6" y="0.6" width="46.8" height="46.8" rx="11.4" fill="none" '
+        'stroke="#A77B24" stroke-width="1.2" opacity=".7" />'
+        '<circle cx="22" cy="26" r="15.4" fill="none" stroke="#D6A93A" stroke-width="1.5" />'
+        + "".join(ticks)
+        + '<circle cx="22" cy="26" r="5.2" fill="none" stroke="#F5C96B" stroke-width="1.3" />'
+        '<circle cx="22" cy="26" r="2.2" fill="#F5C96B" />'
+        '<path d="M29.8 8.6A20 20 0 0 1 42.6 20.4" fill="none" stroke="#F5C96B" '
+        'stroke-width="1.5" stroke-linecap="round" opacity=".9" />'
+        '<path d="M38.6 9.2 40.1 13.1 44 14.6 40.1 16.1 38.6 20 37.1 16.1 33.2 14.6 37.1 13.1Z" '
+        'fill="#F5C96B" />'
+        "</svg>"
+    )
+
+
+_ZODIAC = "♈♉♊♋♌♍♎♏♐♑♒♓"
+
+
+def _zodiac_wheel() -> str:
+    """Kahraman bölümünün arkasında yavaşça dönen zodyak çarkı (dekoratif)."""
+    cx = cy = 200.0
+    parts = [
+        '<circle cx="200" cy="200" r="192" fill="none" stroke="#A77B24" stroke-width="0.8" opacity=".35" />',
+        '<circle cx="200" cy="200" r="176" fill="none" stroke="#D6A93A" stroke-width="0.7" opacity=".45" />',
+        '<circle cx="200" cy="200" r="132" fill="none" stroke="#A77B24" stroke-width="0.7" opacity=".3" />',
+    ]
+    for i in range(72):
+        a = math.radians(i * 5)
+        major = i % 6 == 0
+        r1, r2 = 176.0, (162.0 if major else 169.0)
+        parts.append(
+            '<line x1="{:.2f}" y1="{:.2f}" x2="{:.2f}" y2="{:.2f}" stroke="#D6A93A" '
+            'stroke-width="{}" opacity="{}" />'.format(
+                cx + r1 * math.sin(a), cy - r1 * math.cos(a),
+                cx + r2 * math.sin(a), cy - r2 * math.cos(a),
+                1.1 if major else 0.6, ".7" if major else ".35",
+            )
+        )
+    for i, glyph in enumerate(_ZODIAC):
+        a = math.radians(i * 30 + 15)
+        x, y = cx + 152 * math.sin(a), cy - 152 * math.cos(a)
+        parts.append(
+            f'<text x="{x:.2f}" y="{y:.2f}" text-anchor="middle" dominant-baseline="central" '
+            f'font-size="19" fill="#F5C96B" opacity=".8">{glyph}</text>'
+        )
+    inner = [
+        '<circle cx="200" cy="200" r="92" fill="none" stroke="#A77B24" stroke-width="0.7" opacity=".35" />',
+        '<circle cx="200" cy="200" r="30" fill="none" stroke="#F5C96B" stroke-width="0.9" opacity=".6" />',
+        '<circle cx="200" cy="200" r="4" fill="#F5C96B" opacity=".9" />',
+    ]
+    for i in range(12):
+        a = math.radians(i * 30)
+        inner.append(
+            '<line x1="{:.2f}" y1="{:.2f}" x2="{:.2f}" y2="{:.2f}" stroke="#A77B24" '
+            'stroke-width="0.6" opacity=".4" />'.format(
+                cx + 30 * math.sin(a), cy - 30 * math.cos(a),
+                cx + 92 * math.sin(a), cy - 92 * math.cos(a),
+            )
+        )
+    return (
+        '<svg class="wheel" viewBox="0 0 400 400" aria-hidden="true" focusable="false">'
+        '<g class="wheel-outer">' + "".join(parts) + "</g>"
+        '<g class="wheel-inner">' + "".join(inner) + "</g>"
+        "</svg>"
+    )
+
+
+# Apple logosu — satır içi silüet. Apple Inc.'in tescilli markasıdır; bu rozet
+# resmî varlığın yer tutucusudur ve yayından önce Apple'ın kendi rozetiyle
+# değiştirilmelidir.
+_APPLE_GLYPH = (
+    "M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 "
+    "20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 "
+    "36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 "
+    "90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 "
+    "24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"
+)
+
+
+def _apple_badge_svg(label: str) -> str:
+    return (
+        '<svg class="badge-art apple" viewBox="0 0 120 40" role="img" '
+        f'aria-label="{label}"><title>{label}</title>'
+        '<rect x="0.6" y="0.6" width="118.8" height="38.8" rx="8.6" fill="#000000" '
+        'stroke="#A6A6A6" stroke-width="1.1" />'
+        f'<g fill="#FFFFFF" transform="translate(10.6,9.6) scale(0.0391)"><path d="{_APPLE_GLYPH}" /></g>'
+        '<text x="30.5" y="16.1" fill="#FFFFFF" font-family="Inter,Helvetica Neue,Arial,sans-serif" '
+        'font-size="7.6" letter-spacing="0.15">Download on the</text>'
+        '<text x="29.8" y="31.4" fill="#FFFFFF" font-family="Inter,Helvetica Neue,Arial,sans-serif" '
+        'font-size="16.6" font-weight="600" letter-spacing="-0.2">App Store</text>'
+        "</svg>"
+    )
+
+
+# --------------------------------------------------------------------------
+# Stil
+# --------------------------------------------------------------------------
+
 _STYLE = """
 :root{
   color-scheme:dark;
   --bg:#0A0813; --bg2:#120E24; --surface:#1A1433; --surface2:#140F28;
-  --line:#2A2150; --gold:#D6A93A; --rich:#F5C96B; --ivory:#FAF8F2;
-  --text:#CFC7DE; --muted:#9C92BA;
+  --line:#2A2150; --gold:#D6A93A; --rich:#F5C96B; --old:#A77B24;
+  --ivory:#FAF8F2; --text:#CFC7DE; --muted:#9C92BA;
+  --pad:clamp(16px,4vw,28px);
+  --ease:cubic-bezier(.2,.8,.2,1);
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:88px}
 body{margin:0;background:var(--bg);color:var(--text);
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  font-size:16px;line-height:1.7;overflow-x:hidden}
+  font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
 img{max-width:100%;height:auto;display:block}
+svg{display:block}
 a{color:var(--rich)}
 a:focus-visible,summary:focus-visible,button:focus-visible{
-  outline:2px solid var(--rich);outline-offset:3px;border-radius:4px}
-.wrap{width:100%;max-width:1040px;margin:0 auto;padding:0 20px}
-.narrow{max-width:760px}
+  outline:2px solid var(--rich);outline-offset:3px;border-radius:6px}
+.wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 var(--pad)}
+.narrow{max-width:800px}
+.skip{position:absolute;left:-9999px;top:auto}
+.skip:focus{position:fixed;left:14px;top:14px;z-index:99;background:var(--surface);
+  color:var(--ivory);padding:10px 16px;border-radius:10px;border:1px solid var(--gold);
+  text-decoration:none}
 
-/* header */
-header.site{position:sticky;top:0;z-index:10;background:rgba(10,8,19,.92);
-  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  padding:12px 0;justify-content:space-between}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ivory)}
-.brand img{width:32px;height:32px;border-radius:8px}
-.brand span{font-family:'Cinzel',Georgia,serif;font-size:19px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--rich)}
-.navlinks{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;font-size:14px}
-.navlinks a{color:var(--muted);text-decoration:none}
-.navlinks a:hover{color:var(--rich)}
-.navlinks a[aria-current]{color:var(--rich);font-weight:600}
-.sep{color:var(--line)}
+/* ---------- header ---------- */
+header.site{position:sticky;top:0;z-index:30;
+  background:rgba(10,8,19,.88);
+  -webkit-backdrop-filter:saturate(140%) blur(14px);backdrop-filter:saturate(140%) blur(14px);
+  border-bottom:1px solid rgba(42,33,80,.9);
+  transition:background .35s ease,border-color .35s ease,box-shadow .35s ease}
+header.site::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(214,169,58,.45),transparent);opacity:.9}
+/* Saydam baslik yalnizca JS varken: JS kapaliyken baslik her zaman
+   okunakli, yari opak zeminde kalir (at-top sinifi etkisiz olur). */
+html.js-head header.site.at-top{background:transparent;border-bottom-color:transparent;
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+html.js-head header.site.at-top::after{opacity:0}
+html.js-head header.site:not(.at-top){box-shadow:0 18px 40px -30px rgba(0,0,0,.95)}
+.bar{display:flex;align-items:center;gap:14px;justify-content:space-between;
+  min-height:66px;padding:10px var(--pad)}
+.brand{display:inline-flex;align-items:center;gap:11px;text-decoration:none;flex:0 0 auto}
+.brand .mark{flex:none;filter:drop-shadow(0 0 12px rgba(214,169,58,.28));
+  transition:transform .4s var(--ease)}
+.brand:hover .mark{transform:rotate(6deg)}
+.brand .wm{font-family:'Cinzel',Georgia,serif;font-weight:600;font-size:19px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--rich);line-height:1}
+@supports((-webkit-background-clip:text) or (background-clip:text)){
+  .brand .wm{background:linear-gradient(180deg,#FFF3C4 5%,#D6A93A 85%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}}
+.nav{display:flex;align-items:center;gap:2px}
+.nav a{color:var(--muted);text-decoration:none;font-size:14px;padding:9px 12px;
+  border-radius:999px;transition:color .22s ease,background .22s ease}
+.nav a:hover{color:var(--rich);background:rgba(214,169,58,.09)}
+.nav a[aria-current]{color:var(--rich)}
+.tools{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.langsw{display:inline-flex;align-items:stretch;border:1px solid var(--line);
+  border-radius:999px;overflow:hidden;background:rgba(26,20,51,.55)}
+.langsw a{font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  padding:7px 11px;color:var(--muted);text-decoration:none;line-height:1.2;
+  transition:color .22s ease,background .22s ease}
+.langsw a:hover{color:var(--rich)}
+.langsw a[aria-current]{color:#17120B;
+  background:linear-gradient(180deg,#F5C96B,#D6A93A)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  text-decoration:none;font-weight:600;font-size:14px;border-radius:999px;
+  padding:11px 20px;white-space:nowrap;
+  transition:transform .2s var(--ease),box-shadow .3s ease,background .3s ease}
+.btn-gold{background:linear-gradient(180deg,#F5C96B,#D6A93A);color:#17120B;
+  box-shadow:0 0 0 rgba(245,201,107,0)}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 0 24px rgba(245,201,107,.28)}
+.btn-ghost{border:1px solid var(--old);color:var(--rich)}
+.btn-ghost:hover{background:rgba(214,169,58,.1);transform:translateY(-1px)}
+.btn .short{display:none}
+@media(max-width:760px){.nav .sec{display:none}}
+@media(max-width:560px){
+  .bar{gap:8px;min-height:60px}
+  .brand .wm{font-size:15px;letter-spacing:.16em}
+  .nav{display:none}
+  .btn{padding:9px 14px;font-size:13px}
+  .btn .full{display:none}.btn .short{display:inline}
+  .langsw a{padding:6px 8px;font-size:11px;letter-spacing:.1em}
+}
 
-/* hero */
-.hero{position:relative;padding:64px 0 48px;
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;padding:clamp(56px,9vw,104px) 0 clamp(48px,7vw,80px);
   background:
-    radial-gradient(60% 46% at 50% 0%, rgba(214,169,58,.16), transparent 70%),
-    radial-gradient(90% 60% at 80% 20%, rgba(58,45,107,.45), transparent 70%),
-    var(--bg)}
-.hero-grid{display:grid;gap:40px;grid-template-columns:1fr;align-items:center}
+    radial-gradient(64% 48% at 50% -6%, rgba(214,169,58,.16), transparent 68%),
+    radial-gradient(80% 60% at 84% 14%, rgba(66,49,124,.42), transparent 70%),
+    radial-gradient(70% 55% at 6% 62%, rgba(40,28,82,.5), transparent 72%),
+    linear-gradient(180deg,#0A0813,#0C0A1A 60%,#0A0813);
+  border-bottom:1px solid rgba(42,33,80,.7)}
+.hero::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 18%, rgba(250,248,242,.75), transparent),
+    radial-gradient(1.2px 1.2px at 27% 62%, rgba(245,201,107,.7), transparent),
+    radial-gradient(1.3px 1.3px at 41% 12%, rgba(250,248,242,.6), transparent),
+    radial-gradient(1.1px 1.1px at 58% 78%, rgba(250,248,242,.55), transparent),
+    radial-gradient(1.4px 1.4px at 73% 30%, rgba(245,201,107,.6), transparent),
+    radial-gradient(1.2px 1.2px at 86% 66%, rgba(250,248,242,.6), transparent),
+    radial-gradient(1.1px 1.1px at 94% 22%, rgba(250,248,242,.5), transparent),
+    radial-gradient(1.2px 1.2px at 6% 86%, rgba(245,201,107,.5), transparent)}
+canvas.stars{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  display:block;z-index:0}
+.hero .wrap{position:relative;z-index:1}
+.hero-grid{display:grid;gap:clamp(36px,5vw,56px);grid-template-columns:1fr;align-items:center}
 .hero-grid>*{min-width:0}
-@media(min-width:860px){.hero-grid{grid-template-columns:1.05fr .95fr;gap:48px}}
-.overline{font-size:12px;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--gold);margin:0 0 14px}
+@media(min-width:900px){.hero-grid{grid-template-columns:1.04fr .96fr}}
+.overline{font-family:'Cinzel',Georgia,serif;font-size:11.5px;letter-spacing:.3em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 16px;display:flex;
+  align-items:center;gap:12px}
+.overline::after{content:'';height:1px;flex:1;max-width:120px;
+  background:linear-gradient(90deg,rgba(167,123,36,.75),transparent)}
 h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;
-  font-size:clamp(34px,7.2vw,56px);line-height:1.12;color:var(--ivory);
-  margin:0 0 18px;letter-spacing:.01em}
-h1 em{font-style:normal;color:var(--rich)}
-.lede{font-size:clamp(16px,2.4vw,18px);color:var(--text);margin:0 0 28px;max-width:34em}
-.hero-shot{margin:0 auto;max-width:300px;
-  filter:drop-shadow(0 24px 60px rgba(0,0,0,.65))}
-.hero-shot img{width:100%;border-radius:22px;border:1px solid var(--line)}
+  font-size:clamp(38px,7.4vw,66px);line-height:1.08;color:var(--ivory);
+  margin:0 0 20px;letter-spacing:.005em}
+h1 em{font-style:normal;color:var(--rich);
+  text-shadow:0 0 40px rgba(245,201,107,.22)}
+.lede{font-size:clamp(16px,2.2vw,18.5px);color:var(--text);margin:0 0 28px;max-width:35em}
+.herolist{display:flex;flex-wrap:wrap;gap:8px 10px;list-style:none;margin:0 0 30px;padding:0}
+.herolist li{font-size:12.5px;letter-spacing:.02em;color:var(--text);
+  border:1px solid rgba(167,123,36,.4);background:rgba(26,20,51,.5);
+  border-radius:999px;padding:6px 13px;line-height:1.4}
+.herolist li b{color:var(--rich);font-weight:600}
+.hero-art{position:relative;display:grid;place-items:center;min-height:320px}
+.wheel{position:absolute;width:min(126%,560px);height:auto;aspect-ratio:1;
+  opacity:.42;pointer-events:none;z-index:0}
+.wheel-outer{transform-origin:50% 50%;animation:spin 240s linear infinite}
+.wheel-inner{transform-origin:50% 50%;animation:spin 150s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.device{position:relative;z-index:1;width:min(84%,290px);border-radius:26px;
+  padding:6px;background:linear-gradient(160deg,rgba(245,201,107,.5),rgba(167,123,36,.12) 42%,rgba(42,33,80,.5));
+  box-shadow:0 40px 90px -40px rgba(0,0,0,.95),0 0 60px -20px rgba(214,169,58,.28);
+  will-change:transform}
+.device img{width:100%;border-radius:21px;display:block}
+.device::after{content:'';position:absolute;left:12%;right:12%;bottom:-26px;height:36px;
+  border-radius:50%;background:radial-gradient(50% 50% at 50% 50%,rgba(214,169,58,.35),transparent 70%);
+  filter:blur(6px);pointer-events:none}
 
-/* store badges */
-.stores{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 14px;padding:0;list-style:none}
-.badge{display:inline-flex;flex-direction:column;justify-content:center;
-  min-height:52px;padding:8px 20px;border-radius:999px;border:1px solid var(--line);
-  background:var(--surface2);text-decoration:none;color:var(--muted)}
-.badge b{display:block;color:var(--ivory);font-size:15px;font-weight:600;line-height:1.3}
-.badge small{font-size:11px;letter-spacing:.14em;text-transform:uppercase}
-a.badge{border-color:var(--gold);color:var(--rich)}
-a.badge b{color:var(--rich)}
-.storenote{font-size:13px;color:var(--muted);margin:0}
+/* ---------- store badges ---------- */
+.getbox{margin:0}
+.soonpill{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;
+  font-family:'Cinzel',Georgia,serif;font-size:11px;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--rich);border:1px solid rgba(167,123,36,.55);
+  background:rgba(214,169,58,.08);border-radius:999px;padding:6px 14px}
+.stores{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 16px;padding:0;list-style:none}
+.store{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  height:77px;border-radius:16px;text-decoration:none;
+  transition:transform .25s var(--ease),filter .3s ease,box-shadow .3s ease}
+.store .badge-art{display:block}
+/* Play rozetinin kendi kenar boslugu var (646x250 icinde 564x168 gorunur kutu);
+   Apple rozetine ayni optik boslugu vererek iki rozet ayni yuksekte hizalanir. */
+.store img.badge-art{width:200px;height:77px}
+.store--apple{padding:0 12.7px}
+.store .apple{width:156px;height:52px}
+.store--soon{cursor:default;filter:grayscale(.6) brightness(.68) contrast(.92)}
+.store--soon:hover{filter:grayscale(.3) brightness(.86)}
+a.store:hover,a.store:focus-visible{transform:translateY(-3px);
+  box-shadow:0 18px 38px -20px rgba(245,201,107,.6)}
+.storenote{font-size:13.5px;color:var(--muted);margin:0;max-width:40em}
 
-/* sections */
-section{padding:56px 0;border-top:1px solid var(--line)}
+/* ---------- sections ---------- */
+main{display:block}
+section{padding:clamp(56px,8vw,104px) 0;position:relative}
+section+section{border-top:1px solid rgba(42,33,80,.55)}
+section.alt{background:
+  radial-gradient(60% 50% at 50% 0%, rgba(40,28,82,.35), transparent 70%),
+  linear-gradient(180deg,#0B0916,#0A0813)}
+.eyebrow{font-family:'Cinzel',Georgia,serif;font-size:11px;letter-spacing:.3em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 14px;display:flex;
+  align-items:center;gap:12px}
+.eyebrow::after{content:'';height:1px;flex:1;max-width:140px;
+  background:linear-gradient(90deg,rgba(167,123,36,.7),transparent)}
 h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;
-  font-size:clamp(26px,4.6vw,36px);color:var(--ivory);margin:0 0 12px;line-height:1.2}
-h3{font-family:'Inter',sans-serif;font-size:17px;color:var(--ivory);margin:0 0 6px}
-.sub{color:var(--muted);margin:0 0 32px;max-width:44em}
+  font-size:clamp(30px,4.8vw,44px);color:var(--ivory);margin:0 0 14px;line-height:1.14}
+h3{font-family:'Inter',sans-serif;font-size:17px;font-weight:600;color:var(--ivory);
+  margin:0 0 8px;letter-spacing:.005em}
+.sub{color:var(--muted);margin:0 0 40px;max-width:46em;font-size:16.5px}
+section p{margin:0 0 16px}
+section p:last-child{margin-bottom:0}
 
-.cards{display:grid;gap:14px;grid-template-columns:1fr}
+.cards{display:grid;gap:16px;grid-template-columns:1fr}
 .cards>*{min-width:0}
-@media(min-width:560px){.cards{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:880px){.cards{grid-template-columns:repeat(3,1fr)}}
-.card{background:var(--surface2);border:1px solid var(--line);border-radius:16px;
-  padding:20px}
-.card p{margin:0;font-size:14.5px;color:var(--text)}
-.card .glyph{font-size:20px;color:var(--gold);line-height:1;margin-bottom:10px}
+@media(min-width:620px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:980px){.cards{grid-template-columns:repeat(3,1fr)}}
+.card{position:relative;overflow:hidden;border-radius:18px;padding:24px 22px 26px;
+  border:1px solid var(--line);
+  background:linear-gradient(170deg,rgba(26,20,51,.85),rgba(19,14,38,.85));
+  transition:transform .3s var(--ease),border-color .3s ease,box-shadow .3s ease}
+.card::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:radial-gradient(120% 80% at 50% -18%,rgba(245,201,107,.16),transparent 62%);
+  transition:opacity .35s ease}
+.card:hover{transform:translateY(-5px);border-color:rgba(167,123,36,.7);
+  box-shadow:0 26px 50px -30px rgba(0,0,0,.95)}
+.card:hover::before{opacity:1}
+.card>*{position:relative}
+.card .glyph{width:42px;height:42px;display:flex;align-items:center;justify-content:center;
+  border-radius:13px;border:1px solid rgba(167,123,36,.55);background:rgba(214,169,58,.08);
+  color:var(--rich);font-size:19px;line-height:1;margin-bottom:15px;
+  transition:box-shadow .35s ease,background .35s ease}
+.card:hover .glyph{background:rgba(214,169,58,.16);box-shadow:0 0 22px rgba(245,201,107,.25)}
+.card p{margin:0;font-size:14.8px;color:var(--text)}
 
-.shots{display:grid;gap:14px;grid-template-columns:repeat(2,1fr)}
-@media(min-width:720px){.shots{grid-template-columns:repeat(4,1fr)}}
+.shots{display:grid;gap:16px;grid-template-columns:repeat(2,1fr)}
+@media(min-width:840px){.shots{grid-template-columns:repeat(4,1fr)}}
 .shots>*{min-width:0}
-.shots figure{margin:0}
-.shots img{width:100%;border-radius:14px;border:1px solid var(--line)}
-.shots figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+.shots figure{margin:0;will-change:transform}
+.shots .frame{border-radius:18px;padding:5px;
+  background:linear-gradient(160deg,rgba(245,201,107,.34),rgba(42,33,80,.5));
+  box-shadow:0 26px 50px -34px rgba(0,0,0,.95);
+  transition:transform .35s var(--ease),box-shadow .35s ease;will-change:transform}
+.shots figure:hover .frame{transform:translateY(-6px);
+  box-shadow:0 30px 56px -28px rgba(245,201,107,.35)}
+.shots img{width:100%;border-radius:14px}
+.shots figcaption{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5}
 
-.split{display:grid;gap:32px;grid-template-columns:1fr;align-items:center}
-@media(min-width:820px){.split{grid-template-columns:1fr 1fr;gap:48px}}
+.split{display:grid;gap:clamp(30px,4.5vw,56px);grid-template-columns:1fr;align-items:center}
+@media(min-width:880px){.split{grid-template-columns:1.02fr .98fr}}
 .split>*{min-width:0}
-.split .shot{max-width:260px;margin:0 auto}
-.split .shot img{width:100%;border-radius:20px;border:1px solid var(--line)}
+.split .shot{position:relative;display:grid;place-items:center}
+.split .device{width:min(78%,268px)}
 
-ul.plain{margin:0;padding-left:20px}
-ul.plain li{margin-bottom:8px;font-size:15px}
+ul.plain{margin:0;padding:0;list-style:none;display:grid;gap:12px}
+ul.plain li{position:relative;padding-left:28px;font-size:15.2px}
+ul.plain li::before{content:'\\2726';position:absolute;left:0;top:.05em;color:var(--gold);font-size:13px}
+ul.links{display:grid;gap:10px;margin:0;padding:0;list-style:none}
 
-.note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);
-  border-radius:12px;padding:16px 18px;color:var(--ivory);font-size:14.5px}
+.note{background:linear-gradient(170deg,rgba(26,20,51,.9),rgba(19,14,38,.9));
+  border:1px solid var(--line);border-left:3px solid var(--gold);
+  border-radius:14px;padding:18px 20px;color:var(--ivory);font-size:14.6px;line-height:1.65}
 .note strong{color:var(--rich)}
 
-details{background:var(--surface2);border:1px solid var(--line);border-radius:12px;
-  padding:0;margin-bottom:10px}
-summary{cursor:pointer;padding:14px 18px;color:var(--ivory);font-weight:600;
-  font-size:15.5px;list-style:none}
+.panel{border:1px solid var(--line);border-radius:22px;padding:clamp(26px,4vw,44px);
+  background:
+    radial-gradient(70% 90% at 12% 0%, rgba(214,169,58,.12), transparent 62%),
+    linear-gradient(170deg,rgba(26,20,51,.92),rgba(16,12,32,.92));
+  box-shadow:0 30px 60px -40px rgba(0,0,0,.9)}
+.panel h2{margin-bottom:10px}
+
+details{background:linear-gradient(170deg,rgba(26,20,51,.75),rgba(19,14,38,.75));
+  border:1px solid var(--line);border-radius:14px;padding:0;margin-bottom:10px;
+  transition:border-color .25s ease,background .25s ease}
+details:hover{border-color:rgba(167,123,36,.6)}
+details[open]{border-color:rgba(167,123,36,.7)}
+summary{cursor:pointer;padding:15px 20px;color:var(--ivory);font-weight:600;
+  font-size:15.5px;list-style:none;display:flex;justify-content:space-between;gap:16px}
 summary::-webkit-details-marker{display:none}
-summary::after{content:'+';float:right;color:var(--gold);font-weight:400}
+summary::after{content:'+';color:var(--gold);font-weight:400;font-size:18px;line-height:1.3}
 details[open] summary::after{content:'\\2212'}
-details .answer{padding:0 18px 16px;font-size:14.5px}
+details .answer{padding:0 20px 18px;font-size:14.6px}
 details .answer p{margin:0 0 10px}
 details .answer p:last-child{margin:0}
 
-.contactbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;
-  padding:24px}
+.contactbox{border:1px solid var(--line);border-radius:18px;padding:26px;
+  background:radial-gradient(80% 120% at 10% 0%,rgba(214,169,58,.12),transparent 60%),
+    linear-gradient(170deg,rgba(26,20,51,.9),rgba(16,12,32,.9))}
 .contactbox .mail{font-family:'Cormorant Garamond',Georgia,serif;
-  font-size:clamp(22px,4.4vw,30px);color:var(--rich);text-decoration:none;
-  word-break:break-word}
+  font-size:clamp(24px,4.4vw,34px);color:var(--rich);text-decoration:none;
+  word-break:break-word;line-height:1.2;display:inline-block}
+.contactbox .mail:hover{text-shadow:0 0 28px rgba(245,201,107,.4)}
 
-footer.site{border-top:1px solid var(--line);padding:36px 0 48px;
-  color:var(--muted);font-size:13.5px}
-.footlinks{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 16px;padding:0;list-style:none}
-.footlinks a{color:var(--muted);text-decoration:none}
-.footlinks a:hover{color:var(--rich)}
-.disclaimer{font-size:13px;color:var(--muted);max-width:60em}
+/* ---------- footer ---------- */
+footer.site{border-top:1px solid var(--line);padding:clamp(44px,6vw,72px) 0 48px;
+  color:var(--muted);font-size:13.8px;
+  background:linear-gradient(180deg,#0A0813,#0B0917)}
+.footgrid{display:grid;gap:32px;grid-template-columns:1fr;margin-bottom:36px}
+@media(min-width:760px){.footgrid{grid-template-columns:1.4fr 1fr 1fr;gap:40px}}
+.footbrand .brand{margin-bottom:14px}
+.foottag{margin:0;max-width:30em;color:var(--muted)}
+.footcol h4{font-family:'Cinzel',Georgia,serif;font-size:11px;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 14px;font-weight:600}
+.footcol ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.footcol a{color:var(--muted);text-decoration:none;transition:color .2s ease}
+.footcol a:hover{color:var(--rich)}
+.footbottom{border-top:1px solid rgba(42,33,80,.7);padding-top:22px;display:grid;gap:14px}
+.footbottom .langsw{justify-self:start}
+.disclaimer{font-size:13px;color:var(--muted);max-width:62em;margin:0}
+.copy{margin:0;font-size:12.5px;color:#7d75a0}
 
+/* ---------- hareket ---------- */
+html.js-motion .reveal{opacity:0;transform:translateY(20px);
+  transition:opacity .7s ease,transform .7s var(--ease)}
+html.js-motion .reveal.in{opacity:1;transform:none}
+html.js-motion .stagger>*{opacity:0;transform:translateY(18px);
+  transition:opacity .6s ease,transform .6s var(--ease)}
+html.js-motion .stagger.in>*{opacity:1;transform:none}
+STAGGER_DELAYS
 @media(prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  html{scroll-behavior:auto}
+  .reveal,.reveal.in,.stagger>*,.stagger.in>*{opacity:1!important;transform:none!important}
+  .device,.shots .frame{transform:none!important}
+  canvas.stars{display:none}
 }
-@media(max-width:380px){.wrap{padding:0 14px}}
+@media print{canvas.stars,.wheel{display:none}}
+"""
+
+_STYLE = _STYLE.replace(
+    "STAGGER_DELAYS",
+    "".join(
+        f"html.js-motion .stagger.in>*:nth-child({i}){{transition-delay:{(i - 1) * 55}ms}}"
+        for i in range(1, 13)
+    ),
+)
+
+# Hareket yalnızca JS varsa ve kullanıcı azaltılmış hareket istemiyorsa açılır.
+# <head> içinde çalışır: gizleme sınıfı ancak gözlemci kesinlikle çalışacaksa
+# eklenir, böylece JS kapalıyken hiçbir bölüm opacity:0'da takılı kalmaz.
+_HEAD_SCRIPT = (
+    "<script>try{var r=document.documentElement;r.classList.add('js-head');"
+    "if('IntersectionObserver' in window&&window.matchMedia&&"
+    "!matchMedia('(prefers-reduced-motion: reduce)').matches){"
+    "r.classList.add('js-motion')}}catch(e){}</script>"
+)
+
+_SCRIPT = """
+(function(){
+  var d=document, root=d.documentElement, w=window;
+  var reduce=false;
+  try{reduce=w.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
+
+  /* --- header durumu + telefon parallax --- */
+  var head=d.querySelector('header.site');
+  var para=[].slice.call(d.querySelectorAll('[data-parallax]'));
+  var ticking=false;
+  function paint(){
+    ticking=false;
+    var y=w.pageYOffset||root.scrollTop||0;
+    if(head){ if(y<8){head.classList.add('at-top');} else {head.classList.remove('at-top');} }
+    if(reduce||para.length===0||w.innerWidth<720) return;
+    var vh=w.innerHeight||1;
+    for(var i=0;i<para.length;i++){
+      var el=para[i], r=el.getBoundingClientRect();
+      if(r.bottom<-200||r.top>vh+200) continue;
+      var p=(r.top+r.height/2-vh/2)/vh;
+      if(p>1)p=1; if(p<-1)p=-1;
+      var amt=parseFloat(el.getAttribute('data-parallax'))||16;
+      el.style.transform='translate3d(0,'+(p*-amt).toFixed(1)+'px,0)';
+    }
+  }
+  function onScroll(){ if(!ticking){ticking=true;requestAnimationFrame(paint);} }
+  w.addEventListener('scroll',onScroll,{passive:true});
+  w.addEventListener('resize',onScroll);
+  paint();
+
+  /* --- bolum acilis animasyonu --- */
+  var targets=[].slice.call(d.querySelectorAll('.reveal,.stagger'));
+  if(root.classList.contains('js-motion')&&'IntersectionObserver' in w){
+    var io=new IntersectionObserver(function(entries){
+      for(var i=0;i<entries.length;i++){
+        if(entries[i].isIntersecting){entries[i].target.classList.add('in');io.unobserve(entries[i].target);}
+      }
+    },{rootMargin:'0px 0px -6% 0px',threshold:0.06});
+    for(var t=0;t<targets.length;t++){io.observe(targets[t]);}
+  }else{
+    root.classList.remove('js-motion');
+  }
+
+  /* --- yildiz alani (canvas) --- */
+  var cv=d.querySelector('canvas.stars');
+  if(!cv||reduce||!cv.getContext) return;
+  var ctx=cv.getContext('2d');
+  var dpr=Math.min(w.devicePixelRatio||1,2);
+  var stars=[],W=0,H=0,raf=0,visible=!d.hidden,inView=true;
+  function build(){
+    var n=Math.round(W*H/11000); if(n<34)n=34; if(n>120)n=120;
+    stars=[];
+    for(var i=0;i<n;i++){
+      stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.05+0.35,
+        a:Math.random()*0.45+0.22,v:Math.random()*0.05+0.015,
+        p:Math.random()*6.283,d:Math.random()*0.014+0.004,g:i%7===0});
+    }
+  }
+  function size(){
+    var r=cv.getBoundingClientRect(); W=r.width; H=r.height;
+    if(W<=0||H<=0) return;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0); build();
+  }
+  function frame(){
+    raf=requestAnimationFrame(frame);
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<stars.length;i++){
+      var s=stars[i];
+      s.p+=s.d; s.y-=s.v;
+      if(s.y<-2){s.y=H+2;s.x=Math.random()*W;}
+      var a=s.a+Math.sin(s.p)*0.2; if(a<0.05)a=0.05;
+      ctx.globalAlpha=a;
+      ctx.fillStyle=s.g?'#F5C96B':'#FBF8EF';
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.2832); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  function play(){ if(!raf&&visible&&inView){raf=requestAnimationFrame(frame);} }
+  function stop(){ if(raf){cancelAnimationFrame(raf);raf=0;} }
+  d.addEventListener('visibilitychange',function(){
+    visible=!d.hidden; if(visible){play();}else{stop();}
+  });
+  if('IntersectionObserver' in w){
+    new IntersectionObserver(function(e){
+      inView=e[0].isIntersecting; if(inView){play();}else{stop();}
+    },{threshold:0}).observe(cv);
+  }
+  var rt=0;
+  w.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(size,180);});
+  size(); play();
+})();
 """
 
 _FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
-    "family=Cinzel:wght@500;600&family=Cormorant+Garamond:wght@500;600&"
+    "family=Cinzel:wght@500;600&family=Cormorant+Garamond:wght@500;600;700&"
     'family=Inter:wght@400;500;600&display=swap">'
 )
+
 
 # --------------------------------------------------------------------------
 # İçerik — yalnızca gerçekten var olan özellikler (app_en.arb / app_tr.arb).
@@ -604,6 +1029,73 @@ TEXTS: dict[str, dict] = {
 }
 
 
+# --- 2026 sunum revizyonunun ek metinleri (içerik değil, çerçeve) ---------
+
+TEXTS["en"].update({
+    "skip": "Skip to content",
+    "nav_label": "Main",
+    "nav_features": "Features",
+    "nav_screens": "Screens",
+    "cta": "Get the app",
+    "cta_short": "Get app",
+    "lang_code": "EN",
+    "hero_points": [
+        "<b>Free</b> daily whisper",
+        "<b>20</b> languages",
+        "Photos <b>deleted</b> after analysis",
+    ],
+    "badge_apple": "Download on the App Store",
+    "badge_google": "Get it on Google Play",
+    "ey_features": "The modules",
+    "ey_lyra": "Cosmic Memory",
+    "ey_privacy": "Privacy",
+    "ey_shots": "Inside",
+    "ey_plans": "Premium",
+    "ey_get": "Download",
+    "get_title": "Coming to iOS and Android",
+    "foot_tagline": "Your chart, your readings and your guide — in one app.",
+    "foot_col_product": "Product",
+    "foot_col_legal": "Legal",
+    "ey_sup_contact": "Contact",
+    "ey_sup_about": "About",
+    "ey_sup_delete": "Your data",
+    "ey_sup_subs": "Billing",
+    "ey_sup_faq": "Questions",
+})
+
+TEXTS["tr"].update({
+    "skip": "İçeriğe geç",
+    "nav_label": "Ana menü",
+    "nav_features": "Özellikler",
+    "nav_screens": "Ekranlar",
+    "cta": "Uygulamayı al",
+    "cta_short": "İndir",
+    "lang_code": "TR",
+    "hero_points": [
+        "<b>Ücretsiz</b> günlük fısıltı",
+        "<b>20</b> dil",
+        "Fotoğraflar analizden sonra <b>silinir</b>",
+    ],
+    "badge_apple": "Download on the App Store",
+    "badge_google": "Get it on Google Play",
+    "ey_features": "Modüller",
+    "ey_lyra": "Kozmik Hafıza",
+    "ey_privacy": "Gizlilik",
+    "ey_shots": "İçeriden",
+    "ey_plans": "Premium",
+    "ey_get": "İndir",
+    "get_title": "iOS ve Android'e geliyor",
+    "foot_tagline": "Haritan, yorumların ve rehberin — tek uygulamada.",
+    "foot_col_product": "Uygulama",
+    "foot_col_legal": "Yasal",
+    "ey_sup_contact": "İletişim",
+    "ey_sup_about": "Hakkında",
+    "ey_sup_delete": "Verilerin",
+    "ey_sup_subs": "Ödeme",
+    "ey_sup_faq": "Sorular",
+})
+
+
 # --------------------------------------------------------------------------
 # Yapı taşları
 # --------------------------------------------------------------------------
@@ -616,6 +1108,7 @@ def _head(title: str, description: str, lang: str, canonical_path: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<meta name="theme-color" content="#0A0813">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="website">
@@ -627,6 +1120,7 @@ def _head(title: str, description: str, lang: str, canonical_path: str) -> str:
 <link rel="alternate" hreflang="tr" href="https://astrype.com{canonical_path}?lang=tr">
 {_FONTS}
 <style>{_STYLE}</style>
+{_HEAD_SCRIPT}
 </head>
 <body>"""
 
@@ -636,55 +1130,96 @@ def _header(lang: str, page: str) -> str:
     other = "tr" if lang == "en" else "en"
     path = "/support" if page == "support" else "/"
     sup_cur = ' aria-current="page"' if page == "support" else ""
-    return f"""<header class="site"><div class="wrap"><div class="bar">
-<a class="brand" href="/?lang={lang}">
-<img src="/static/img/icon.png" alt="" width="32" height="32">
-<span>Astrype</span></a>
-<nav class="navlinks" aria-label="{t["langs_label"]}">
+    home = f"/?lang={lang}"
+    anchor = "" if page == "home" else home
+    return f"""<a class="skip" href="#main">{t["skip"]}</a>
+<header class="site at-top"><div class="wrap bar">
+<a class="brand" href="{home}" aria-label="Astrype">{_brand_mark("hm", 34)}<span class="wm">Astrype</span></a>
+<nav class="nav" aria-label="{t["nav_label"]}">
+<a class="sec" href="{anchor}#features">{t["nav_features"]}</a>
+<a class="sec" href="{anchor}#screens">{t["nav_screens"]}</a>
 <a href="/support?lang={lang}"{sup_cur}>{t["nav_support"]}</a>
-<a href="/legal/privacy?lang={lang}">{t["nav_privacy"]}</a>
-<a href="/legal/terms?lang={lang}">{t["nav_terms"]}</a>
-<span class="sep" aria-hidden="true">|</span>
-<a href="{path}?lang={lang}" lang="{lang}" hreflang="{lang}" aria-current="true">{TEXTS[lang]["native"]}</a>
-<a href="{path}?lang={other}" lang="{other}" hreflang="{other}">{TEXTS[other]["native"]}</a>
-</nav></div></div></header>"""
+</nav>
+<div class="tools">
+<div class="langsw" role="group" aria-label="{t["langs_label"]}">
+<a href="{path}?lang={lang}" lang="{lang}" hreflang="{lang}" aria-current="true">{TEXTS[lang]["lang_code"]}</a>
+<a href="{path}?lang={other}" lang="{other}" hreflang="{other}">{TEXTS[other]["lang_code"]}</a>
+</div>
+<a class="btn btn-gold" href="{anchor}#get"><span class="full">{t["cta"]}</span><span class="short">{t["cta_short"]}</span></a>
+</div>
+</div></header>"""
 
 
 def _stores(lang: str) -> str:
-    """Yayına çıkınca APP_STORE_URL / PLAY_STORE_URL doldurulur; gerisi otomatik."""
+    """Yayına çıkınca APP_STORE_URL / PLAY_STORE_URL doldurulur; gerisi otomatik:
+    rozetler gri "yakında" durumundan çıkıp gerçek bağlantıya dönüşür."""
     t = TEXTS[lang]
-    items = []
-    for url, name, top in (
-        (APP_STORE_URL, t["store_soon_apple"], t["store_live_top"]),
-        (PLAY_STORE_URL, t["store_soon_google"], t["store_live_top_g"]),
-    ):
+    soon = t["store_soon_title"]
+    live = bool(APP_STORE_URL and PLAY_STORE_URL)
+
+    def wrap(url: str, art: str, extra: str = "") -> str:
         if url:
-            items.append(
-                f'<li><a class="badge" href="{url}" rel="noopener">'
-                f"<small>{top}</small><b>{name}</b></a></li>"
-            )
-        else:
-            items.append(
-                f'<li><span class="badge"><small>{t["store_soon_title"]}</small>'
-                f"<b>{name}</b></span></li>"
-            )
-    note = "" if (APP_STORE_URL and PLAY_STORE_URL) else f'<p class="storenote">{t["store_note"]}</p>'
-    return f'<ul class="stores">{"".join(items)}</ul>{note}'
+            return f'<li><a class="store{extra}" href="{url}" rel="noopener">{art}</a></li>'
+        return f'<li><span class="store{extra} store--soon" aria-disabled="true">{art}</span></li>'
+
+    apple_label = t["badge_apple"] if APP_STORE_URL else f'{t["badge_apple"]} — {soon}'
+    google_label = t["badge_google"] if PLAY_STORE_URL else f'{t["badge_google"]} — {soon}'
+    google_art = (
+        f'<img class="badge-art" src="{PLAY_BADGE_IMG}" alt="{google_label}" '
+        'width="200" height="77" loading="lazy" decoding="async">'
+    )
+    pill = (
+        ""
+        if live
+        else f'<p class="soonpill"><span aria-hidden="true">✦</span> {soon}</p>'
+    )
+    note = "" if live else f'<p class="storenote">{t["store_note"]}</p>'
+    return (
+        f'<div class="getbox">{pill}<ul class="stores">'
+        f'{wrap(APP_STORE_URL, _apple_badge_svg(apple_label), " store--apple")}'
+        f'{wrap(PLAY_STORE_URL, google_art)}'
+        f"</ul>{note}</div>"
+    )
 
 
 def _footer(lang: str) -> str:
     t = TEXTS[lang]
+    other = "tr" if lang == "en" else "en"
     return f"""<footer class="site"><div class="wrap">
-<ul class="footlinks">
+<div class="footgrid">
+<div class="footbrand">
+<a class="brand" href="/?lang={lang}" aria-label="Astrype">{_brand_mark("fm", 32)}<span class="wm">Astrype</span></a>
+<p class="foottag">{t["foot_tagline"]}</p>
+</div>
+<div class="footcol">
+<h4>{t["foot_col_product"]}</h4>
+<ul>
+<li><a href="/?lang={lang}#features">{t["nav_features"]}</a></li>
+<li><a href="/?lang={lang}#screens">{t["nav_screens"]}</a></li>
+<li><a href="/?lang={lang}#get">{t["cta"]}</a></li>
 <li><a href="/support?lang={lang}">{t["foot_support"]}</a></li>
+</ul>
+</div>
+<div class="footcol">
+<h4>{t["foot_col_legal"]}</h4>
+<ul>
 <li><a href="/legal/privacy?lang={lang}">{t["foot_privacy"]}</a></li>
 <li><a href="/legal/terms?lang={lang}">{t["foot_terms"]}</a></li>
 <li><a href="/legal/source">{t["foot_source"]}</a></li>
 <li>{t["foot_contact"]}: <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a></li>
 </ul>
+</div>
+</div>
+<div class="footbottom">
+<div class="langsw" role="group" aria-label="{t["langs_label"]}">
+<a href="/?lang={lang}" lang="{lang}" hreflang="{lang}" aria-current="true">{TEXTS[lang]["native"]}</a>
+<a href="/?lang={other}" lang="{other}" hreflang="{other}">{TEXTS[other]["native"]}</a>
+</div>
 <p class="disclaimer">{t["disclaimer"]}</p>
-<p class="disclaimer">&copy; Astrype</p>
+<p class="copy">&copy; Astrype</p>
+</div>
 </div></footer>
+<script>{_SCRIPT}</script>
 </body></html>"""
 
 
@@ -704,62 +1239,99 @@ def render_home(lang: str) -> str:
         for glyph, name, body in t["features"]
     )
     shots = "\n".join(
-        f'<figure><img src="/static/img/{src}" alt="{alt}" width="600" height="1300" loading="lazy"></figure>'
+        f'<figure data-parallax="10"><div class="frame">'
+        f'<img src="/static/img/{src}" alt="{alt}" width="600" height="1300" '
+        'loading="lazy" decoding="async"></div>'
+        f"<figcaption>{alt}</figcaption></figure>"
         for src, alt in t["shots"]
     )
+    points = "".join(f"<li>{p}</li>" for p in t["hero_points"])
     lyra = "\n".join(f"<p>{p}</p>" for p in t["lyra_body"])
     priv = "\n".join(f"<p>{p}</p>" for p in t["privacy_body"])
-    points = "\n".join(f"<li>{p}</li>" for p in t["privacy_points"])
+    privpoints = "\n".join(f"<li>{p}</li>" for p in t["privacy_points"])
     plans = "\n".join(f"<p>{p}</p>" for p in t["plans_body"])
 
     return f"""{_head(t["home_title"], t["home_desc"], lang, "/")}
 {_header(lang, "home")}
-<main>
-<div class="hero"><div class="wrap"><div class="hero-grid">
-<div>
+<main id="main">
+<div class="hero">
+<canvas class="stars" aria-hidden="true"></canvas>
+<div class="wrap"><div class="hero-grid">
+<div class="hero-copy">
 <p class="overline">{t["hero_overline"]}</p>
 <h1>{t["hero_h1_a"]}<br><em>{t["hero_h1_b"]}</em></h1>
 <p class="lede">{t["hero_lede"]}</p>
+<ul class="herolist">{points}</ul>
 {_stores(lang)}
 </div>
-<div class="hero-shot"><img src="/static/img/{hero_shot}" alt="{t["hero_shot_alt"]}" width="600" height="1300"></div>
+<div class="hero-art">
+{_zodiac_wheel()}
+<div class="device" data-parallax="18">
+<img src="/static/img/{hero_shot}" alt="{t["hero_shot_alt"]}" width="600" height="1300" fetchpriority="high">
+</div>
+</div>
 </div></div></div>
 
-<section id="features"><div class="wrap">
+<section id="features" class="alt"><div class="wrap">
+<div class="reveal">
+<p class="eyebrow">{t["ey_features"]}</p>
 <h2>{t["f_title"]}</h2>
 <p class="sub">{t["f_sub"]}</p>
-<div class="cards">
+</div>
+<div class="cards stagger">
 {cards}
 </div>
 </div></section>
 
-<section id="lyra"><div class="wrap"><div class="split">
+<section id="lyra"><div class="wrap"><div class="split reveal">
 <div>
+<p class="eyebrow">{t["ey_lyra"]}</p>
 <h2>{t["lyra_title"]}</h2>
 {lyra}
 </div>
-<div class="shot"><img src="/static/img/{lyra_shot}" alt="{t["lyra_alt"]}" width="600" height="1300" loading="lazy"></div>
+<div class="shot">
+<div class="device" data-parallax="14">
+<img src="/static/img/{lyra_shot}" alt="{t["lyra_alt"]}" width="600" height="1300" loading="lazy" decoding="async">
+</div>
+</div>
 </div></div></section>
 
-<section id="privacy"><div class="wrap narrow">
+<section id="privacy" class="alt"><div class="wrap narrow">
+<div class="panel reveal">
+<p class="eyebrow">{t["ey_privacy"]}</p>
 <h2>{t["privacy_title"]}</h2>
 {priv}
-<ul class="plain">
-{points}
+<ul class="plain" style="margin-top:22px">
+{privpoints}
 </ul>
+</div>
 </div></section>
 
 <section id="screens"><div class="wrap">
+<div class="reveal">
+<p class="eyebrow">{t["ey_shots"]}</p>
 <h2>{t["shots_title"]}</h2>
-<div class="shots">
+</div>
+<div class="shots stagger">
 {shots}
 </div>
 </div></section>
 
-<section id="plans"><div class="wrap narrow">
+<section id="plans" class="alt"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_plans"]}</p>
 <h2>{t["plans_title"]}</h2>
 {plans}
-<p class="note">{t["disclaimer"]}</p>
+<p class="note" style="margin-top:22px">{t["disclaimer"]}</p>
+</div>
+</div></section>
+
+<section id="get"><div class="wrap narrow">
+<div class="panel reveal">
+<p class="eyebrow">{t["ey_get"]}</p>
+<h2>{t["get_title"]}</h2>
+{_stores(lang)}
+</div>
 </div></section>
 </main>
 {_footer(lang)}"""
@@ -769,55 +1341,72 @@ def render_support(lang: str) -> str:
     t = TEXTS[lang]
     steps = "\n".join(f"<li>{s}</li>" for s in t["sup_delete_steps"])
     faq = "\n".join(
-        "<details><summary>{q}</summary><div class=\"answer\">{a}</div></details>".format(
+        '<details><summary>{q}</summary><div class="answer">{a}</div></details>'.format(
             q=q, a="".join(f"<p>{p}</p>" for p in answers)
         )
         for q, answers in t["faq"]
     )
     return f"""{_head(t["support_title"], t["support_desc"], lang, "/support")}
 {_header(lang, "support")}
-<main>
-<div class="hero"><div class="wrap narrow">
+<main id="main">
+<div class="hero">
+<canvas class="stars" aria-hidden="true"></canvas>
+<div class="wrap narrow">
 <p class="overline">{t["sup_overline"]}</p>
 <h1>{t["sup_h1_a"]}<br><em>{t["sup_h1_b"]}</em></h1>
 <p class="lede">{t["sup_lede"]}</p>
 </div></div>
 
 <section id="contact"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_sup_contact"]}</p>
 <h2>{t["sup_contact_title"]}</h2>
 <p>{t["sup_contact_body"]}</p>
-<div class="contactbox">
+<div class="contactbox" style="margin-top:22px">
 <a class="mail" href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a>
+</div>
 </div>
 </div></section>
 
-<section id="about"><div class="wrap narrow">
+<section id="about" class="alt"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_sup_about"]}</p>
 <h2>{t["sup_what_title"]}</h2>
 <p>{t["sup_what_body"]}</p>
-<p class="note">{t["disclaimer"]}</p>
+<p class="note" style="margin-top:22px">{t["disclaimer"]}</p>
+</div>
 </div></section>
 
 <section id="delete"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_sup_delete"]}</p>
 <h2>{t["sup_delete_title"]}</h2>
 <p>{t["sup_delete_body"]}</p>
-<ul class="plain">
+<ul class="plain" style="margin-top:20px">
 {steps}
 </ul>
+</div>
 </div></section>
 
-<section id="subscriptions"><div class="wrap narrow">
+<section id="subscriptions" class="alt"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_sup_subs"]}</p>
 <h2>{t["sup_subs_title"]}</h2>
 <p>{t["sup_subs_body"]}</p>
-<ul class="plain">
+<ul class="plain" style="margin-top:20px">
 <li><a href="{APPLE_SUBSCRIPTIONS_URL}" rel="noopener">{t["sup_subs_apple"]}</a></li>
 <li><a href="{GOOGLE_SUBSCRIPTIONS_URL}" rel="noopener">{t["sup_subs_google"]}</a></li>
 </ul>
+</div>
 </div></section>
 
 <section id="faq"><div class="wrap narrow">
+<div class="reveal">
+<p class="eyebrow">{t["ey_sup_faq"]}</p>
 <h2>{t["sup_faq_title"]}</h2>
 {faq}
 <p style="margin-top:28px"><a href="/?lang={lang}">&larr; {t["sup_back"]}</a></p>
+</div>
 </div></section>
 </main>
 {_footer(lang)}"""

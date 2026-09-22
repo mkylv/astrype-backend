@@ -23,7 +23,7 @@ router = APIRouter(tags=["legal"])
 
 # İletişim — yayın öncesi gerçek destek adresiyle doğrulanmalı.
 # (Güncelleme tarihi her dil modülünde yerelleştirilmiş olarak tutulur.)
-_CONTACT = "destek@astrype.com"
+_CONTACT = "support@astrype.com"
 
 # Backend kaynak kodu (AGPL-3.0 §13). Repo taşınırsa yalnızca burası değişir;
 # uygulama ve dış bağlantılar kalıcı /legal/source adresini kullanabilir.

@@ -45,7 +45,7 @@ def test_privacy_en_photo_deletion_and_providers(client: TestClient) -> None:
     assert "deleted immediately after analysis" in html
     assert "OpenAI" in html and "Google Gemini" in html
     assert "Permanently delete account" in html
-    assert "mailto:destek@astrype.com" in html
+    assert "mailto:support@astrype.com" in html
 
 
 @pytest.mark.parametrize("code", sorted(RTL_LANGS))
@@ -143,7 +143,7 @@ def test_every_language_renders_with_section_parity(
         extra = 1 if (tag == "p" and code != SOURCE_LANG) else 0
         assert _count(html, tag) == _count(tr_html, tag) + extra, (code, kind, tag)
     assert "{" not in re.sub(r"<style>.*?</style>", "", html, flags=re.S), code
-    assert html.count("mailto:destek@astrype.com") == tr_html.count("mailto:destek@astrype.com")
+    assert html.count("mailto:support@astrype.com") == tr_html.count("mailto:support@astrype.com")
     assert html.count(f'href="{REPO}"') == tr_html.count(f'href="{REPO}"') >= 1
     assert "Astrype" in html
     # Dil seçici: 20 bağlantı
