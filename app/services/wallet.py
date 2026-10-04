@@ -89,6 +89,23 @@ def _already_unlocked(sb: Client, unlock_key: str | None) -> bool:
     return bool(getattr(res, "data", None))
 
 
+
+def _balance_with_signup_bonus(sb: Client, user_id: str, needed: int, balance: int) -> int:
+    """Bakiye yetmiyorsa kayıt hediyesinin verildiğinden emin ol, yeni bakiyeyi dön.
+
+    Hediye eskiden yalnızca GET /wallet çağrılınca veriliyordu. Yeni kullanıcının
+    uygulaması ana ekranda günlük yorumu cüzdandan ÖNCE isteyince bakiye 0
+    görünüyor ve ilk ekranda 402 alıyordu ("The sky is quiet today").
+    ensure_signup_bonus idempotent olduğu için tekrar çağrılması güvenli; yalnızca
+    yetersiz bakiye yolunda çağrılır, mutlu yolda ek sorgu yok.
+    """
+    if balance >= needed:
+        return balance
+    try:
+        return int(ensure_signup_bonus(sb, user_id))
+    except Exception:  # hediye verilemezse eski davranış: mevcut bakiyeyle devam
+        return balance
+
 def check_access(
     sb: Client, user_id: str, feature: str, unlock_key: str | None = None
 ) -> Access:
@@ -112,6 +129,7 @@ def check_access(
     if _already_unlocked(sb, unlock_key):
         return Access(feature, price, category, False, "already_unlocked", balance)
     # one_time (her zaman) veya continuous (abone değil) → coin gerekir
+    balance = _balance_with_signup_bonus(sb, user_id, price, balance)
     if balance < price:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -235,7 +253,7 @@ def charge_lyra_message(
                 "daily_used": used_count, "daily_limit": daily_limit}
 
     cost = cat.LYRA_MSG_COST_SUBSCRIBER if subscriber else cat.LYRA_MSG_COST
-    balance = get_balance(sb, user_id)
+    balance = _balance_with_signup_bonus(sb, user_id, cost, get_balance(sb, user_id))
     if balance < cost:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
