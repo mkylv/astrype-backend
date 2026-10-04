@@ -1,5 +1,7 @@
 """Natal chart hesapla/kaydet + AI yorumu + istemciye gösterilebilir özet."""
+import asyncio
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
@@ -210,6 +212,56 @@ def _geometry(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+log = logging.getLogger(__name__)
+
+# Kişisel natal yorumun üretimi ~80 sn sürüyor. Eskiden kullanıcı haritaya İLK
+# girdiğinde başlıyordu → yeni kullanıcının (ve App Review'ın) ilk izlenimi bir
+# dakikalık bekleme. Artık ilk harita kaydedildiği an arka planda başlar; kullanıcı
+# haritaya girince aynı işi bekler. Görev chart id'sine göre paylaşılır: arka plan
+# üretimi sürerken /chart/interpret gelirse İKİNCİ üretim başlamaz (çift bekleme,
+# çift AI maliyeti). Tek uvicorn worker'da tam; çok worker'da en kötü ihtimalle
+# iki üretim olur (bugünkü davranış).
+_INTERP_TASKS: dict[str, "asyncio.Task[dict[str, Any] | None]"] = {}
+
+
+async def _generate_and_store_interpretation(
+    user_id: str, chart_id: str, snap: dict[str, Any]
+) -> dict[str, Any] | None:
+    sb = get_supabase()
+    try:
+        profile = get_profile(sb, user_id) or {}
+        recalled = await recall(sb, user_id, "natal harita kişilik temaları")
+        context = build_context_block(
+            profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
+        )
+        interpretation = await complete_json(prompts.NATAL, context)
+    except Exception as exc:  # AI zaman aşımı / hata: istemci yeniden deneyebilir
+        log.warning("natal yorum üretilemedi chart=%s: %s", chart_id, type(exc).__name__)
+        return None
+    try:
+        # Güncel display'i oku ve yalnızca yorumu ekle (çark/SVG'yi ezme).
+        cur = _first_row(sb.table("charts").select("display").eq("id", chart_id).limit(1).execute())
+        if cur is not None:
+            display = {**(cur.get("display") or {}), "interpretation": interpretation}
+            sb.table("charts").update({"display": display}).eq("id", chart_id).execute()
+    except Exception as exc:
+        log.warning("natal yorum kaydedilemedi chart=%s: %s", chart_id, type(exc).__name__)
+    return interpretation
+
+
+def _interpretation_task(
+    user_id: str, chart_id: str, snap: dict[str, Any]
+) -> "asyncio.Task[dict[str, Any] | None]":
+    """Bu harita için süren üretim varsa onu, yoksa yenisini döner."""
+    task = _INTERP_TASKS.get(chart_id)
+    if task is None or task.done():
+        task = asyncio.create_task(_generate_and_store_interpretation(user_id, chart_id, snap))
+        _INTERP_TASKS[chart_id] = task
+        task.add_done_callback(lambda _t, cid=chart_id: _INTERP_TASKS.pop(cid, None))
+    return task
+
+
 @router.get("/chart")
 async def get_chart(user: CurrentUser = Depends(current_user)):
     """Kullanıcının KAYITLI doğum haritasını döner (yeniden hesaplamadan).
@@ -306,7 +358,7 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
             sb.table("charts").delete().eq("user_id", user.id).execute()
         except Exception:
             pass
-        sb.table("charts").insert(
+        inserted = sb.table("charts").insert(
             {
                 "user_id": user.id,
                 "raw_json": raw,
@@ -314,6 +366,11 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
                 "display": display,
             }
         ).execute()
+        # Hızlı (lazy) modda yorumu ŞİMDİ arka planda başlat; kullanıcı haritaya
+        # girdiğinde hazır olsun ya da kalan kısmı beklesin.
+        new_rows = getattr(inserted, "data", None) or []
+        if lazy and interpretation is None and new_rows and new_rows[0].get("id"):
+            _interpretation_task(user.id, str(new_rows[0]["id"]), snap)
         # Cosmic Memory: yalnız KENDİ haritası hafızaya (AI sohbet bilsin).
         bodies_txt = ", ".join(
             f"{b['name']} {b['sign']}{' ℞' if b.get('retrograde') else ''}"
@@ -374,22 +431,10 @@ async def interpret_chart(user: CurrentUser = Depends(current_user)):
 
     raw = row.get("raw_json") or {}
     snap = display.get("snapshot") or _snapshot(raw)
-    profile = get_profile(sb, user.id) or {}
-    recalled = await recall(sb, user.id, "natal harita kişilik temaları")
-    context = build_context_block(
-        profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
-    )
-    try:
-        interpretation = await complete_json(prompts.NATAL, context)
-    except Exception:
-        return {"interpretation": None}
-
-    # Kayıtlı display'e yaz (bir daha üretilmesin).
-    new_display = {**display, "interpretation": interpretation}
-    try:
-        sb.table("charts").update({"display": new_display}).eq("id", row["id"]).execute()
-    except Exception:
-        pass
+    # Kayıt anında arka planda başlamış üretim varsa onu bekle (yenisini başlatma).
+    # shield: istemci bağlantıyı koparsa paylaşılan üretim iptal olmasın.
+    task = _interpretation_task(user.id, str(row["id"]), snap)
+    interpretation = await asyncio.shield(task)
     return {"interpretation": interpretation}
 
 
