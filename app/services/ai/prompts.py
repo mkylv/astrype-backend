@@ -727,6 +727,21 @@ YILDIZNAME += DEEP_LENGTH_XL
 HUMAN_DESIGN += DEEP_LENGTH_XL
 
 TAROT += DEEP_LENGTH
+# Tarot için KESİN uzunluk sınırı (DEEP_LENGTH'ten SONRA gelir, onu sınırlar).
+# Gerçek çıktı istemin kendi hedefinin (~650-950 kelime) iki katına çıkıyordu
+# (~1.900 kelime, ~11.700 karakter) → kullanıcı kart seçtikten sonra ~25 sn
+# bekliyordu. Derinlik korunur, şişkinlik kesilir; hedef ~12 sn.
+TAROT += """
+
+UZUNLUK SINIRI (bu açılım için kesin, yukarıdaki uzunluk talimatından önceliklidir):
+Toplam 650-850 kelimeyi GEÇME. Dağılım:
+- "summary": en fazla 2 paragraf (yaklaşık 120-170 kelime)
+- "cards": her kart yaklaşık 130-180 kelime; üç katmanı (iç durum, arketip,
+  gündelik karşılık) kısa ve yoğun cümlelerle ver, tekrar etme
+- "reflection": tek soru
+- "deep": tek kısa paragraf (en fazla 100 kelime)
+Derinliği uzunlukla değil yoğunlukla ver: her cümle yeni ve somut bir şey söylesin.
+"""
 RELATIONSHIP += DEEP_LENGTH
 COFFEE += DEEP_LENGTH
 PALM += DEEP_LENGTH
