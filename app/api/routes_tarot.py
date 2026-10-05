@@ -1,4 +1,5 @@
 """Tarot — lokal RWS desteden çekim + OpenAI Astrype yorumu."""
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends
@@ -25,6 +26,16 @@ _FOCUS_TR = {
     "wellness": "Sağlık",
     "single_question": "Tek Soru",
 }
+
+
+_BG: set[asyncio.Task] = set()
+
+
+def _background(coro) -> None:
+    """Fire-and-forget; görev referansı tutulur (GC erken toplamasın)."""
+    t = asyncio.create_task(coro)
+    _BG.add(t)
+    t.add_done_callback(_BG.discard)
 
 
 def _positions(focus: str | None, count: int) -> list[str]:
@@ -68,7 +79,9 @@ async def _reading(
             "Soru": question if focus == "single_question" and question else "(yok)",
         },
     )
-    result = await complete_json(prompts.TAROT, context)
+    # Tarot'ta kart anlamları hazır gelir; modelin "düşünmesi" kaliteye
+    # katkı sağlamadan ~1-2 sn ekliyordu → kapalı.
+    result = await complete_json(prompts.TAROT, context, reasoning_effort="none")
 
     # 3) Arşivle + hafıza (görsel saklamadan, sadece kart adları + sonuç)
     sb.table("readings").insert(
@@ -79,7 +92,9 @@ async def _reading(
             "result": result,
         }
     ).execute()
-    await remember(sb, user.id, "reading", f"Tarot ({focus_tr}): {result.get('summary', '')}")
+    # Hafıza yazımı (embedding + insert) kullanıcıyı bekletmesin: arka planda.
+    # remember() hataları kendi içinde yutar.
+    _background(remember(sb, user.id, "reading", f"Tarot ({focus_tr}): {result.get('summary', '')}"))
 
     # İstemciye zengin kartlar + AI yorumu + coin düşümü
     charge = wallet.commit_charge(sb, user.id, "tarot")

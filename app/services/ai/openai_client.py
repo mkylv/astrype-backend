@@ -63,7 +63,9 @@ def _messages(system: str, user_content: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _model_kwargs(model: str, temperature: float) -> dict[str, Any]:
+def _model_kwargs(
+    model: str, temperature: float, reasoning_effort: str | None = None
+) -> dict[str, Any]:
     """Modele göre doğru parametreler.
 
     GPT-5 (gpt-5.6-luna dahil) reasoning modelleri: temperature GÖNDERME (yalnız
@@ -71,24 +73,35 @@ def _model_kwargs(model: str, temperature: float) -> dict[str, Any]:
     ile bol tavan ver (reasoning token'ları uzun çıktıyı kesmesin). Diğer
     modeller (gpt-4o/gpt-4.1): temperature'ı ilet."""
     if model.startswith("gpt-5"):
-        return {"max_completion_tokens": 16000}
+        kw: dict[str, Any] = {"max_completion_tokens": 16000}
+        if reasoning_effort:
+            kw["reasoning_effort"] = reasoning_effort
+        return kw
     return {"temperature": temperature}
 
 
-async def _openai_json(system: str, user_text: str) -> dict[str, Any]:
+async def _openai_json(
+    system: str, user_text: str, reasoning_effort: str | None = None
+) -> dict[str, Any]:
     s = get_settings()
     resp = await _get_client().chat.completions.create(
         model=s.openai_chat_model,
         messages=_messages(system, user_text),
         response_format={"type": "json_object"},
         timeout=_timeout(s.ai_long_timeout_seconds),
-        **_model_kwargs(s.openai_chat_model, 0.8),
+        **_model_kwargs(s.openai_chat_model, 0.8, reasoning_effort),
     )
     return json.loads(resp.choices[0].message.content or "{}")
 
 
-async def complete_json(system: str, user_text: str) -> dict[str, Any]:
+async def complete_json(
+    system: str, user_text: str, *, reasoning_effort: str | None = None
+) -> dict[str, Any]:
     """JSON modunda yorum üret. OpenAI çökerse (kota/limit) Gemini'ye düşer.
+
+    reasoning_effort: reasoning modellerinde (gpt-5*) düşünme bütçesi. Hızın
+    kritik olduğu, derin akıl yürütme gerektirmeyen okumalarda "none" verilir
+    (ör. tarot: kart anlamları hazır gelir, model yalnızca yazar).
 
     Toplam (OpenAI + retry + Gemini) AI_LONG_REQUEST_BUDGET ile sınırlı; aşımda
     AITimeoutError, iki sağlayıcı da hata verirse AIUnavailableError.
@@ -96,7 +109,7 @@ async def complete_json(system: str, user_text: str) -> dict[str, Any]:
     s = get_settings()
     budget = s.ai_long_request_budget_seconds
     return await with_fallback(
-        _primary(lambda: _openai_json(system, user_text), budget=budget),
+        _primary(lambda: _openai_json(system, user_text, reasoning_effort), budget=budget),
         lambda: json_gemini_retrying(system, user_text),
         budget=budget,
         fallback_reserve=s.gemini_timeout_seconds,

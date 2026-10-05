@@ -734,12 +734,12 @@ TAROT += DEEP_LENGTH
 TAROT += """
 
 UZUNLUK SINIRI (bu açılım için kesin, yukarıdaki uzunluk talimatından önceliklidir):
-Toplam 650-850 kelimeyi GEÇME. Dağılım:
-- "summary": en fazla 2 paragraf (yaklaşık 120-170 kelime)
-- "cards": her kart yaklaşık 130-180 kelime; üç katmanı (iç durum, arketip,
+Toplam 450-600 kelimeyi GEÇME. Dağılım:
+- "summary": tek dolu paragraf (yaklaşık 80-110 kelime)
+- "cards": her kart yaklaşık 100-140 kelime; üç katmanı (iç durum, arketip,
   gündelik karşılık) kısa ve yoğun cümlelerle ver, tekrar etme
 - "reflection": tek soru
-- "deep": tek kısa paragraf (en fazla 100 kelime)
+- "deep": tek kısa paragraf (en fazla 70 kelime)
 Derinliği uzunlukla değil yoğunlukla ver: her cümle yeni ve somut bir şey söylesin.
 """
 RELATIONSHIP += DEEP_LENGTH
