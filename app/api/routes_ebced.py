@@ -10,7 +10,7 @@ from app.models import EbcedRequest
 from app.services import wallet
 from app.services.ai import prompts
 from app.services.ai.gemini_client import complete_json_gemini
-from app.services.ai.memory import recall, remember
+from app.services.ai.memory import recall, remember_later
 from app.services.ebced.engine import compute_ebced
 
 router = APIRouter(tags=["ebced"])
@@ -80,7 +80,7 @@ async def ebced(body: EbcedRequest, user: CurrentUser = Depends(current_user)):
             sb.table("readings").insert({**record, "type": "reading"}).execute()
         except Exception:
             pass
-    await remember(
+    remember_later(
         sb, user.id, "reading",
         f"Ebced: {full_name} → toplam {name_ebced['total']}, baskın unsur "
         f"{name_ebced['dominant_element']}.",

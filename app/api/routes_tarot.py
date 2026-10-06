@@ -1,5 +1,4 @@
 """Tarot — lokal RWS desteden çekim + OpenAI Astrype yorumu."""
-import asyncio
 import json
 
 from fastapi import APIRouter, Depends
@@ -9,7 +8,7 @@ from app.deps import CurrentUser, current_user, require_feature
 from app.models import TarotPullRequest, TarotSpreadRequest
 from app.services import tarot, wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 
 router = APIRouter(tags=["tarot"])
@@ -26,16 +25,6 @@ _FOCUS_TR = {
     "wellness": "Sağlık",
     "single_question": "Tek Soru",
 }
-
-
-_BG: set[asyncio.Task] = set()
-
-
-def _background(coro) -> None:
-    """Fire-and-forget; görev referansı tutulur (GC erken toplamasın)."""
-    t = asyncio.create_task(coro)
-    _BG.add(t)
-    t.add_done_callback(_BG.discard)
 
 
 def _positions(focus: str | None, count: int) -> list[str]:
@@ -94,7 +83,7 @@ async def _reading(
     ).execute()
     # Hafıza yazımı (embedding + insert) kullanıcıyı bekletmesin: arka planda.
     # remember() hataları kendi içinde yutar.
-    _background(remember(sb, user.id, "reading", f"Tarot ({focus_tr}): {result.get('summary', '')}"))
+    remember_later(sb, user.id, "reading", f"Tarot ({focus_tr}): {result.get('summary', '')}")
 
     # İstemciye zengin kartlar + AI yorumu + coin düşümü
     charge = wallet.commit_charge(sb, user.id, "tarot")

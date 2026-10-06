@@ -15,7 +15,7 @@ from app.deps import CurrentUser, current_user
 from app.models import SubconsciousRequest
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import recall, remember
+from app.services.ai.memory import recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 from app.services.subconscious.engine import (
@@ -111,7 +111,7 @@ async def subconscious(body: SubconsciousRequest, user: CurrentUser = Depends(cu
             pass
 
     summary = (result.get("user_summary") or {}).get("intro_text", "")
-    await remember(
+    remember_later(
         sb, user.id, "chat",
         f"Bilinçaltı testi: birincil gölge '{SHADOWS[primary]}' ({SHADOW_CATEGORY[primary]}), "
         f"ikincil '{SHADOWS[secondary]}', üçüncül '{SHADOWS[tertiary]}'. {summary}",

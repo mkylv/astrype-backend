@@ -3,6 +3,7 @@
 Kural: "her şeyi sakla" değil, yalnızca ANLAMLI analiz özetleri vektörlenir.
 Context toplama (recall) ile yazma (remember) burada birleşir.
 """
+import asyncio
 from typing import Any
 
 from supabase import Client
@@ -51,6 +52,18 @@ async def remember(sb: Client, user_id: str, source: str, summary: str) -> None:
         ).execute()
     except Exception:
         return  # embedding/DB hatası → hafıza yazımı atlanır
+
+
+_BG_TASKS: set[asyncio.Task] = set()
+
+
+def remember_later(sb: Client, user_id: str, source: str, summary: str) -> None:
+    """[remember]'ı arka planda çalıştır — kullanıcı yanıtı hafıza yazımını
+    (embedding + insert, ~1-2 sn) beklemesin. Hatalar remember içinde yutulur.
+    Görev referansı tutulur ki GC erken toplamasın."""
+    t = asyncio.create_task(remember(sb, user_id, source, summary))
+    _BG_TASKS.add(t)
+    t.add_done_callback(_BG_TASKS.discard)
 
 
 async def recall(sb: Client, user_id: str, query: str, top_k: int = _TOP_K) -> list[str]:

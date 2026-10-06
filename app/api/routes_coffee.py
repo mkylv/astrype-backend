@@ -4,13 +4,15 @@ Fotoğraflar yalnızca request ömrü boyunca bellekte tutulur; diske/Storage'a
 asla yazılmaz. Sadece sembol listesi + metin sonucu arşivlenir. Revizyon §6.3:
 farklı açılardan 3 görsel; hepsinden ortak sembol haritası çıkarılır.
 """
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, require_feature
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.vision.coffee_palm import extract_coffee_symbols
 
@@ -42,14 +44,18 @@ async def coffee_reading(
     if not files:
         raise HTTPException(status_code=422, detail="En az bir fotoğraf gerekli.")
 
-    # 1) Her görselden sembol çıkar; birleştir (sıra koruyarak benzersizleştir).
-    collected: list[str] = []
-    for f in files:
-        image_bytes = await f.read()
-        try:
-            collected.extend(await extract_coffee_symbols(image_bytes))
-        finally:
-            image_bytes = b""  # FOTO SİL — diske hiç yazılmadı.
+    # 1) Her görselden sembol çıkar — görseller PARALEL işlenir (eskiden sırayla:
+    # 3 foto = 3 ardışık vision çağrısı). Hafıza sorgusu da aynı anda çalışır.
+    # Birleştirme sırası korunur (gather sonuçları girdi sırasındadır).
+    images = [await f.read() for f in files]
+    try:
+        per_image, recalled = await asyncio.gather(
+            asyncio.gather(*(extract_coffee_symbols(b) for b in images)),
+            recall(sb, user.id, note or "kahve falı genel tema"),
+        )
+    finally:
+        images = []  # FOTO SİL — diske hiç yazılmadı.
+    collected: list[str] = [s for syms in per_image for s in syms]
 
     seen: set[str] = set()
     symbols: list[str] = []
@@ -62,7 +68,6 @@ async def coffee_reading(
     # 2) Sembolleri odağa göre context'le yorumla.
     focus_tr = _FOCUS_TR.get(focus or "general", "Genel")
     profile = get_profile(sb, user.id)
-    recalled = await recall(sb, user.id, note or "kahve falı genel tema")
     context = build_context_block(
         profile,
         recalled,
@@ -85,6 +90,6 @@ async def coffee_reading(
             "result": result,
         }
     ).execute()
-    await remember(sb, user.id, "reading", f"Kahve falı ({focus_tr}): {result.get('summary', '')}")
+    remember_later(sb, user.id, "reading", f"Kahve falı ({focus_tr}): {result.get('summary', '')}")
     charge = wallet.commit_charge(sb, user.id, "coffee")
     return {"symbols": symbols, "result": result, "photo_deleted": True, "charge": charge}

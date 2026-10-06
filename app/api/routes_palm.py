@@ -5,7 +5,7 @@ from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, require_feature
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.vision.coffee_palm import extract_palm_lines
 
@@ -41,6 +41,6 @@ async def palm_reading(
             "result": result,
         }
     ).execute()
-    await remember(sb, user.id, "reading", f"El falı: {result.get('summary', '')}")
+    remember_later(sb, user.id, "reading", f"El falı: {result.get('summary', '')}")
     charge = wallet.commit_charge(sb, user.id, "palm")
     return {"lines": lines, "result": result, "photo_deleted": True, "charge": charge}

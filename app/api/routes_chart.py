@@ -17,7 +17,7 @@ from app.deps import CurrentUser, current_user
 from app.models import ChartRequest
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 
@@ -235,7 +235,7 @@ async def _generate_and_store_interpretation(
         context = build_context_block(
             profile, recalled, {"Natal özet": json.dumps(snap, ensure_ascii=False)}
         )
-        interpretation = await complete_json(prompts.NATAL, context)
+        interpretation = await complete_json(prompts.NATAL, context, reasoning_effort="low")
     except Exception as exc:  # AI zaman aşımı / hata: istemci yeniden deneyebilir
         log.warning("natal yorum üretilemedi chart=%s: %s", chart_id, type(exc).__name__)
         return None
@@ -334,7 +334,7 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
                 profile, recalled,
                 {"Natal özet": json.dumps(snap, ensure_ascii=False)},
             )
-            interpretation = await complete_json(prompts.NATAL, context)
+            interpretation = await complete_json(prompts.NATAL, context, reasoning_effort="low")
         except Exception:
             interpretation = None
 
@@ -381,7 +381,7 @@ async def create_chart(body: ChartRequest, user: CurrentUser = Depends(current_u
             f"Yükselen {snap.get('rising_sign') or '?'}. Gezegenler: {bodies_txt}."
         )
         try:
-            await remember(sb, user.id, "chart", summary)
+            remember_later(sb, user.id, "chart", summary)
         except Exception:
             pass
     # body.for_self False → BAŞKASI için: hesaba KAYDETME (tek seferlik).

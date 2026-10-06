@@ -8,7 +8,7 @@ from app.deps import CurrentUser, current_user
 from app.models import YildiznameRequest
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import recall, remember
+from app.services.ai.memory import recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.ebced.engine import compute_ebced
 
@@ -62,7 +62,7 @@ async def yildizname(body: YildiznameRequest, user: CurrentUser = Depends(curren
         parts.append("Geçmiş içgörüler:\n- " + "\n- ".join(recalled))
     context = "\n\n".join(parts)
 
-    result = await complete_json(prompts.YILDIZNAME, context)
+    result = await complete_json(prompts.YILDIZNAME, context, reasoning_effort="low")
 
     record = {
         "user_id": user.id,
@@ -76,7 +76,7 @@ async def yildizname(body: YildiznameRequest, user: CurrentUser = Depends(curren
             sb.table("readings").insert({**record, "type": "reading"}).execute()
         except Exception:
             pass
-    await remember(
+    remember_later(
         sb, user.id, "reading",
         f"Yıldızname (anne: {mother}): {result.get('summary', '')}",
     )

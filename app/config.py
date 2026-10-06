@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # temperature GÖNDERMEZ (yalnız default 1) + max_completion_tokens verir
     # (bkz. openai_client._model_kwargs). Vision (sembol çıkarımı) gpt-4o'da kalır.
     openai_chat_model: str = "gpt-5.6-luna"
+    # Reasoning modellerinde varsayılan düşünme bütçesi (none|low|medium|high).
+    # Hız için "none"; derin okumalar çağrı yerinde "low" geçer.
+    openai_reasoning_effort: str = "none"
     openai_vision_model: str = "gpt-4o"
     openai_embed_model: str = "text-embedding-3-small"
 

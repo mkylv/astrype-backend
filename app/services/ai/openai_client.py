@@ -74,8 +74,10 @@ def _model_kwargs(
     modeller (gpt-4o/gpt-4.1): temperature'ı ilet."""
     if model.startswith("gpt-5"):
         kw: dict[str, Any] = {"max_completion_tokens": 16000}
-        if reasoning_effort:
-            kw["reasoning_effort"] = reasoning_effort
+        # Varsayılan "none": ölçümde modelin "düşünmesi" yorum kalitesine görünür
+        # katkı sağlamadan her okumaya ~3-5 sn ekliyordu. Derin okumalar
+        # (natal, İnsan Tasarımı, yıldızname, ilişki) çağrı yerinde "low" ister.
+        kw["reasoning_effort"] = reasoning_effort or get_settings().openai_reasoning_effort
         return kw
     return {"temperature": temperature}
 

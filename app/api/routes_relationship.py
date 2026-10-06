@@ -9,7 +9,7 @@ from app.deps import CurrentUser, require_feature
 from app.models import RelationshipRequest
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 
@@ -42,7 +42,7 @@ async def relationship(
             "Sinastri": json.dumps(synastry_raw)[:4000],
         },
     )
-    result = await complete_json(prompts.RELATIONSHIP, context)
+    result = await complete_json(prompts.RELATIONSHIP, context, reasoning_effort="low")
 
     sb.table("relationships").insert(
         {
@@ -53,7 +53,7 @@ async def relationship(
             "result": result,
         }
     ).execute()
-    await remember(
+    remember_later(
         sb, user.id, "relationship",
         f"İlişki ({body.partner_name or 'partner'}): {result.get('summary', '')}",
     )

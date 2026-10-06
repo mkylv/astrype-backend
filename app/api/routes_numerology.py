@@ -9,7 +9,7 @@ from app.deps import CurrentUser, current_user
 from app.models import NumerologyRequest
 from app.services import numerology, wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 
 router = APIRouter(tags=["numerology"])
@@ -68,7 +68,7 @@ async def create_numerology(
         fallback = dict(record)
         fallback["input_meta"] = {"kind": "numerology", "numbers": numbers}
         sb.table("readings").insert({**fallback, "type": "reading"}).execute()
-    await remember(sb, user.id, "numerology", f"Numeroloji: {result.get('summary', '')}")
+    remember_later(sb, user.id, "numerology", f"Numeroloji: {result.get('summary', '')}")
 
     charge = wallet.commit_charge(sb, user.id, "numerology", unlock)
     return {"numbers": numbers, "result": result, "charge": charge}

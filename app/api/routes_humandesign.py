@@ -9,7 +9,7 @@ from app.deps import CurrentUser, current_user
 from app.models import ChartRequest, RelationshipRequest
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.humandesign.engine import (
     calculate_bodygraph,
@@ -45,7 +45,7 @@ async def human_design(body: ChartRequest, user: CurrentUser = Depends(current_u
     context = build_context_block(
         profile, recalled, {"İnsan Tasarımı": json.dumps(compact, ensure_ascii=False)}
     )
-    result = await complete_json(prompts.HUMAN_DESIGN, context)
+    result = await complete_json(prompts.HUMAN_DESIGN, context, reasoning_effort="low")
 
     # 3) Kayıtlar arşivi + Cosmic Memory.
     record = {
@@ -60,7 +60,7 @@ async def human_design(body: ChartRequest, user: CurrentUser = Depends(current_u
             sb.table("readings").insert({**record, "type": "reading"}).execute()
         except Exception:
             pass
-    await remember(
+    remember_later(
         sb, user.id, "chart",
         f"İnsan Tasarımı: {bodygraph['type']} {bodygraph['profile']}, "
         f"{bodygraph['authority']} otorite.",

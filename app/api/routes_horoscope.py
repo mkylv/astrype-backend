@@ -14,7 +14,7 @@ from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember
+from app.services.ai.memory import build_context_block, recall, remember_later
 from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 from app.services.astro.signs import normalize_sign, sign_tr, sun_sign_from_date
@@ -127,7 +127,7 @@ async def sky_today(user: CurrentUser = Depends(current_user)):
     )
     content = await complete_json(prompts.SKY_TODAY, context)
 
-    await remember(
+    remember_later(
         sb, user.id, "chart", f"Günlük gökyüzü ({today}): {content.get('summary', '')}"
     )
 
