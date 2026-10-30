@@ -18,10 +18,9 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+    # Host ağı: hem API'ye (127.0.0.1:8000) hem web sitesine (127.0.0.1:3002,
+    # Docker dışında çalışır) ulaşsın. 80/443'ü doğrudan dinler.
+    network_mode: host
     environment:
       API_DOMAIN: ${API_DOMAIN:-api.astrype.com}
     volumes:

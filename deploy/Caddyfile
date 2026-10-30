@@ -6,7 +6,8 @@
 	request_body {
 		max_size 40MB
 	}
-	reverse_proxy api:8000 {
+	# Caddy host ağında: API'ye yerel porttan ulaşır.
+	reverse_proxy 127.0.0.1:8000 {
 		# Uzun AI okumaları (natal ~80 sn) kesilmesin.
 		transport http {
 			read_timeout 400s
@@ -25,10 +26,22 @@
 	import backend
 }
 
-# Tanıtım sitesi + yasal sayfalar (/legal/...) — Next.js sitesi Vercel'e
-# geçene kadar backend'in kendi sitesi buradan sunulur.
+# Web sitesi + web uygulaması (Next.js, dev kullanıcısı, 127.0.0.1:3002).
+# Yasal sayfalar, destek ve görseller backend'de kalır (App Store linkleri).
 astrype.com {
-	import backend
+	@backend path /legal/* /support /static/* /health
+	handle @backend {
+		import backend
+	}
+	handle {
+		encode zstd gzip
+		reverse_proxy 127.0.0.1:3002
+		header {
+			Strict-Transport-Security "max-age=31536000"
+			X-Content-Type-Options nosniff
+			-Server
+		}
+	}
 }
 
 www.astrype.com {
