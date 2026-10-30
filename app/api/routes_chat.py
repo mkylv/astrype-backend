@@ -1,7 +1,7 @@
 """Cosmic Memory'li AI sohbet."""
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
@@ -16,6 +16,24 @@ from app.services.ai.safety import is_crisis_signal
 router = APIRouter(tags=["chat"])
 
 _HISTORY_LIMIT = 10
+
+
+@router.get("/chat/history")
+async def chat_history(
+    limit: int = Query(40, ge=1, le=100),
+    user: CurrentUser = Depends(current_user),
+):
+    """Son sohbet mesajları (eskiden yeniye) — web sohbeti açılışta gösterir."""
+    sb = get_supabase()
+    res = (
+        sb.table("chat_messages")
+        .select("role,content,created_at")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return {"messages": list(reversed(res.data or []))}
 
 
 @router.post("/chat")
