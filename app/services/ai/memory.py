@@ -31,6 +31,22 @@ _LANG_DISAMBIG = {
 }
 
 
+def user_lang(profile: dict | None) -> str:
+    """Profilin yanıt dili kodu (ör. 'en'); yoksa 'en'."""
+    return ((profile or {}).get("language") or "en").split("-")[0]
+
+
+def language_instruction(language: str | None) -> str:
+    """Modele yanıt dilini açıkça söyleyen tek satır (tüm modüller ortak)."""
+    lang = (language or "en").split("-")[0]
+    lang_name = _LANG_NAMES.get(lang, lang)
+    note = _LANG_DISAMBIG.get(lang, "")
+    return (
+        f"ÇOK ÖNEMLİ: Tüm yanıtını ve tüm JSON alanlarının metinlerini "
+        f"yalnızca {lang_name}{note} dilinde yaz."
+    )
+
+
 async def remember(sb: Client, user_id: str, source: str, summary: str) -> None:
     """Anlamlı bir özeti vektörleyip memory_chunks'a yaz.
 
@@ -107,11 +123,5 @@ def build_context_block(
     # Dil talimatı HER dilde açıkça verilir (Türkçe dahil) — yoksa Luna yakın
     # dile (Azerice) kayabiliyor. tr/az için ayrım notu eklenir.
     if profile:
-        lang = (profile.get("language") or "en").split("-")[0]
-        lang_name = _LANG_NAMES.get(lang, lang)
-        note = _LANG_DISAMBIG.get(lang, "")
-        parts.append(
-            f"ÇOK ÖNEMLİ: Tüm yanıtını ve tüm JSON alanlarının metinlerini "
-            f"yalnızca {lang_name}{note} dilinde yaz."
-        )
+        parts.append(language_instruction(profile.get("language")))
     return "\n\n".join(parts) if parts else "(henüz context yok)"

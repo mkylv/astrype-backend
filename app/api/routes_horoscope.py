@@ -14,7 +14,13 @@ from app.db.supabase_client import get_profile, get_supabase
 from app.deps import CurrentUser, current_user
 from app.services import wallet
 from app.services.ai import prompts
-from app.services.ai.memory import build_context_block, recall, remember_later
+from app.services.ai.memory import (
+    build_context_block,
+    language_instruction,
+    recall,
+    remember_later,
+    user_lang,
+)
 from app.services.ai.openai_client import complete_json
 from app.services.astro import get_astro_provider
 from app.services.astro.signs import normalize_sign, sign_tr, sun_sign_from_date
@@ -23,8 +29,10 @@ router = APIRouter(tags=["horoscope"])
 
 # Modül-içi cache'ler (süreç ömrü boyunca). Anahtarlar tarih/ayı içerir; bayat
 # anahtarlar birikir, tek süreç için sorun değil.
-_daily_cache: dict[tuple[str, str], dict] = {}    # (sign_key, date) -> response
-_monthly_cache: dict[tuple[str, str], dict] = {}  # (sign_key, month) -> response
+# Genel burç yorumları kullanıcıya özel değil ama DİLE özel: anahtar dili içerir
+# (yoksa ilk isteyenin dili herkese giderdi).
+_daily_cache: dict[tuple[str, str, str], dict] = {}    # (sign_key, date, lang) -> response
+_monthly_cache: dict[tuple[str, str, str], dict] = {}  # (sign_key, month, lang) -> response
 _sky_cache: dict[tuple[str, str], dict] = {}      # (user_id, date) -> response
 
 # Türkçe ay adları (aylık burç context'i için).
@@ -62,20 +70,22 @@ async def horoscope_daily(
     sign_key = _resolve_sign_key(sb, user.id, sign)
     name_tr = sign_tr(sign_key)
     today = date.today().isoformat()
+    lang = user_lang(get_profile(sb, user.id))
 
-    cached = _daily_cache.get((sign_key, today))
+    cached = _daily_cache.get((sign_key, today, lang))
     if cached is not None:
         return cached
 
     d = date.today()
     context = (
         f"Burç: {name_tr}\n"
-        f"Tarih: {today} ({_TR_WEEKDAYS[d.weekday()]})"
+        f"Tarih: {today} ({_TR_WEEKDAYS[d.weekday()]})\n"
+        f"{language_instruction(lang)}"
     )
     content = await complete_json(prompts.HOROSCOPE_DAILY, context)
 
     resp = {"sign_key": sign_key, "sign": name_tr, "date": today, "content": content}
-    _daily_cache[(sign_key, today)] = resp
+    _daily_cache[(sign_key, today, lang)] = resp
     return resp
 
 
@@ -93,12 +103,13 @@ async def horoscope_monthly(
     unlock = f"horoscope_monthly:{user.id}:{month}"
     wallet.check_access(sb, user.id, "horoscope_monthly", unlock_key=unlock)  # yetersizse 402
 
-    resp = _monthly_cache.get((sign_key, month))
+    lang = user_lang(get_profile(sb, user.id))
+    resp = _monthly_cache.get((sign_key, month, lang))
     if resp is None:
-        context = f"Burç: {name_tr}\nAy: {_TR_MONTHS[d.month - 1]} {d.year}"
+        context = f"Burç: {name_tr}\nAy: {_TR_MONTHS[d.month - 1]} {d.year}\n{language_instruction(lang)}"
         content = await complete_json(prompts.HOROSCOPE_MONTHLY, context)
         resp = {"sign_key": sign_key, "sign": name_tr, "month": month, "content": content}
-        _monthly_cache[(sign_key, month)] = resp
+        _monthly_cache[(sign_key, month, lang)] = resp
 
     charge = wallet.commit_charge(sb, user.id, "horoscope_monthly", unlock)
     return {**resp, "charge": charge}
