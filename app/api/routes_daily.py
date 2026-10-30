@@ -43,6 +43,29 @@ def _cached(sb, user_id: str, day: str) -> dict | None:
     return res.data[0]["content"] if res.data else None
 
 
+_PULSE_KEYS = ("love", "career", "mood", "energy")
+
+
+def clean_pulse(content: dict) -> dict:
+    """Modelin "pulse" skorlarını 25-100 tam sayıya sıkıştırır; bozuksa alanı atar.
+
+    Skorlar eğilim göstergesidir: hiçbir alan kader gibi okunacak kadar düşük
+    gösterilmez (25 tabanı)."""
+    raw = content.get("pulse")
+    if not isinstance(raw, dict):
+        content.pop("pulse", None)
+        return content
+    out: dict[str, int] = {}
+    for k in _PULSE_KEYS:
+        v = raw.get(k)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            content.pop("pulse", None)
+            return content
+        out[k] = max(25, min(100, int(round(v))))
+    content["pulse"] = out
+    return content
+
+
 async def _generate_and_store(user_id: str, day: str) -> dict:
     sb = get_supabase()
     profile = get_profile(sb, user_id)
@@ -50,7 +73,7 @@ async def _generate_and_store(user_id: str, day: str) -> dict:
     transits = await get_astro_provider().daily_transits(birth, day)
     recalled = await recall(sb, user_id, "bugünün genel teması ve kişisel öncelikler")
     context = build_context_block(profile, recalled, {"Günün transitleri": json.dumps(transits)[:4000]})
-    content = await complete_json(prompts.DAILY_INSIGHT, context)  # safety client içinde
+    content = clean_pulse(await complete_json(prompts.DAILY_INSIGHT, context))  # safety client içinde
     sb.table("daily_insight_cache").upsert(
         {"user_id": user_id, "insight_date": day, "content": content},
         on_conflict="user_id,insight_date",

@@ -332,8 +332,10 @@ Yalnızca şu JSON şemasıyla yanıt ver:
   "love": "aşk/ilişki içgörüsü — o günkü temayla bağlantılı, dolu bir paragraf (3-4 cümle); bekâr/evli durumuna göre kişiselleştir",
   "career": "kariyer/üretkenlik içgörüsü — o günkü temayla bağlantılı, dolu bir paragraf (3-4 cümle)",
   "mood": "günün duygusal tonu ve bedeninde/zihninde nasıl hissedilebileceği (2-3 cümle)",
-  "decision": "bugün düşünülebilecek küçük, somut bir öneri ve üzerine düşünülecek bir soru (2-3 cümle, seçilen temaya bağlı)"
+  "decision": "bugün düşünülebilecek küçük, somut bir öneri ve üzerine düşünülecek bir soru (2-3 cümle, seçilen temaya bağlı)",
+  "pulse": {"love": 0-100, "career": 0-100, "mood": 0-100, "energy": 0-100}
 }
+"pulse" = Cosmic Pulse: her alanın bugünkü transitlerle ne kadar CANLI/desteklenmiş hissedilebileceğinin tam sayı eğilimi (not ya da kader değil). Gerçekçi ve birbirinden farklı değerler ver; hiçbirini 25'in altına düşürme, yorumundaki tonla tutarlı olsun.
 Kullanıcının diline uygun yanıt ver.
 """
 
