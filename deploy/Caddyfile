@@ -1,5 +1,6 @@
-# api.astrype.com → backend. Caddy sertifikayı Let's Encrypt'ten kendisi alır/yeniler.
-{$API_DOMAIN} {
+# Caddy sertifikaları Let's Encrypt'ten kendisi alır ve yeniler.
+
+(backend) {
 	encode zstd gzip
 	# Kahve/el/yüz falı fotoğrafları için yükleme sınırı (3 foto).
 	request_body {
@@ -17,4 +18,19 @@
 		X-Content-Type-Options nosniff
 		-Server
 	}
+}
+
+# Uygulamaların konuştuğu API.
+{$API_DOMAIN} {
+	import backend
+}
+
+# Tanıtım sitesi + yasal sayfalar (/legal/...) — Next.js sitesi Vercel'e
+# geçene kadar backend'in kendi sitesi buradan sunulur.
+astrype.com {
+	import backend
+}
+
+www.astrype.com {
+	redir https://astrype.com{uri} permanent
 }
