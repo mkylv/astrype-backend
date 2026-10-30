@@ -8,6 +8,9 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    # Yalnız sunucunun içinden erişim (bakım/test); dışarıya Caddy açar.
+    ports:
+      - "127.0.0.1:8000:8000"
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
