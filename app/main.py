@@ -28,6 +28,7 @@ from app.api import (
     routes_tarot,
     routes_wallet,
     routes_webhooks,
+    routes_billing,
     routes_yildizname,
 )
 from app.config import get_settings
@@ -106,6 +107,7 @@ for module in (
     routes_legal,
     routes_site,
     routes_webhooks,
+    routes_billing,
 ):
     app.include_router(module.router)
 

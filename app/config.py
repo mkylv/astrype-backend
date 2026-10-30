@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 
+    # Stripe (web ödemeleri). Kapalıyken /billing/checkout 503 döner ve webhook
+    # hiçbir şey yazmaz. Anahtarlar yalnız ortam değişkeninden gelir (test modu:
+    # sk_test_... / whsec_...). return URL'leri yalnız bu kökenlere izin verilir.
+    stripe_enabled: bool = False
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    web_origins: str = "https://astrype.com,http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def web_origin_list(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.web_origins.split(",") if o.strip()]
+
     # Coin ekonomisi ("Yıldız Tozu"). Kapalıyken erişim kapıları no-op'tur:
     # hiçbir okuma ücretlendirilmez (mevcut davranış korunur). Flutter mağazası +
     # RevenueCat dashboard ürünleri hazır olunca Render env'inde 'true' yapılır.
