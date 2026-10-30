@@ -1,0 +1,33 @@
+# Contabo VPS üzerinde: backend + Caddy (otomatik HTTPS).
+# Kullanım (sunucuda, /opt/astrype/backend içinde):
+#   docker compose -f deploy/docker-compose.yml up -d --build
+services:
+  api:
+    build: ..
+    env_file: /opt/astrype/backend.env   # gizli değerler; repoda değil
+    restart: unless-stopped
+    expose:
+      - "8000"
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.astrype.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  caddy_data:
+  caddy_config:

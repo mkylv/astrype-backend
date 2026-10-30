@@ -1,0 +1,20 @@
+# api.astrype.com → backend. Caddy sertifikayı Let's Encrypt'ten kendisi alır/yeniler.
+{$API_DOMAIN} {
+	encode zstd gzip
+	# Kahve/el/yüz falı fotoğrafları için yükleme sınırı (3 foto).
+	request_body {
+		max_size 40MB
+	}
+	reverse_proxy api:8000 {
+		# Uzun AI okumaları (natal ~80 sn) kesilmesin.
+		transport http {
+			read_timeout 400s
+			write_timeout 400s
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+}

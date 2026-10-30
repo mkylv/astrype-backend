@@ -1,0 +1,9 @@
+.venv
+.git
+.tools
+.env
+tests
+docs
+supabase
+__pycache__
+*.pyc
